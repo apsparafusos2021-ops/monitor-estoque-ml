@@ -1,9 +1,9 @@
 [deploy]
-startCommand = "node monitor.js"
+startCommand = "node monitor.js && node monitor_coleta.js"
 
 [[services]]
 name = "monitor-estoque"
-cronSchedule = "0 9 * * *"
+cronSchedule = "30 23 * * *"
 startCommand = "node monitor.js"
 
 [[services]]
