@@ -96,15 +96,23 @@ async function getSales30d(itemId, token) {
   try {
     const dateFrom = new Date();
     dateFrom.setDate(dateFrom.getDate() - 30);
-    const r = await fetchComRetry(
-      `${BASE}/orders/search?seller=${CONFIG.sellerId}&q=${itemId}&order.status=paid&order.date_created.from=${dateFrom.toISOString()}&limit=50`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    if (!r) return 0;
-    const d = await r.json();
-    return (d.results || []).reduce((sum, o) =>
-      sum + (o.order_items || []).filter(i => i.item.id === itemId)
-                         .reduce((s, i) => s + i.quantity, 0), 0);
+    let total = 0, offset = 0;
+    while (true) {
+      const r = await fetchComRetry(
+        `${BASE}/orders/search?seller=${CONFIG.sellerId}&q=${itemId}&order.status=paid&order.date_created.from=${dateFrom.toISOString()}&limit=50&offset=${offset}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!r) break;
+      const d = await r.json();
+      if (!d.results || d.results.length === 0) break;
+      total += (d.results || []).reduce((sum, o) =>
+        sum + (o.order_items || []).filter(i => i.item.id === itemId)
+                           .reduce((s, i) => s + i.quantity, 0), 0);
+      if (d.results.length < 50) break;
+      offset += 50;
+      await sleep(300);
+    }
+    return total;
   } catch (e) { return 0; }
 }
 
