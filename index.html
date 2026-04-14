@@ -629,6 +629,7 @@
         return;
       }
 
+      const iData = cols.findIndex(c => /^data/i.test(c));
       const iSku  = cols.findIndex(c => /^sku/i.test(c));
       const iMlb  = cols.findIndex(c => /^mlb/i.test(c));
       const iProd = cols.findIndex(c => /produto|title/i.test(c));
@@ -639,10 +640,23 @@
       const iPct  = cols.findIndex(c => /^%|pct|cobert/i.test(c));
       const iDias = cols.findIndex(c => /dias|days/i.test(c));
 
-      estoqueData = [...rows].sort((a,b) => (parseNum(a[iDias])||999) - (parseNum(b[iDias])||999));
+      // Deduplica: mantém apenas a entrada mais recente de cada produto
+      const chave = iProd >= 0 ? iProd : (iSku >= 0 ? iSku : 0);
+      const dedup = {};
+      for (const row of rows) {
+        const key = row[chave] || '';
+        const dataAtual  = iData >= 0 ? row[iData] : '';
+        const dataExist  = dedup[key] ? (iData >= 0 ? dedup[key][iData] : '') : '';
+        if (!dedup[key] || dataAtual >= dataExist) {
+          dedup[key] = row;
+        }
+      }
+      const uniqueRows = Object.values(dedup);
+
+      estoqueData = uniqueRows.sort((a,b) => (parseNum(a[iDias])||999) - (parseNum(b[iDias])||999));
       estoquePage = 1;
 
-      document.getElementById('badge-estoque').textContent = rows.length;
+      document.getElementById('badge-estoque').textContent = uniqueRows.length;
       renderEstoque(cols, { iSku, iMlb, iProd, iDisp, iCam, iEnt, iVend, iPct, iDias });
       document.getElementById('estoque-ts').textContent = 'Atualizado às ' + agora();
 
