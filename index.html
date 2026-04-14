@@ -465,8 +465,8 @@
       // Coluna de data curta (última coluna "DATA" ou "DATA.")
       const iDataCurta = cols.lastIndexOf(cols.filter(c => /^data\.?$/i.test(c)).pop());
 
-      // Guarda linhas brutas com data normalizada
-      coletaRawRows = rows.map(row => ({
+      // Guarda linhas brutas com data normalizada e deduplica por MLB+data
+      const allRows = rows.map(row => ({
         mlb:  iMlb  >= 0 ? row[iMlb]  : '–',
         prod: iProd >= 0 ? row[iProd]  : '–',
         sku:  iSku  >= 0 ? row[iSku]   : '–',
@@ -475,6 +475,13 @@
         data: iData >= 0 ? row[iData]  : '',
         dataCurta: iDataCurta >= 0 ? row[iDataCurta].trim() : (iData >= 0 ? row[iData].slice(0,10) : ''),
       }));
+      // Deduplica: mesmo MLB + mesma data curta = mantém a entrada mais recente
+      const dedupMap = {};
+      for (const r of allRows) {
+        const key = r.mlb + '|' + r.dataCurta;
+        if (!dedupMap[key] || r.data >= dedupMap[key].data) dedupMap[key] = r;
+      }
+      coletaRawRows = Object.values(dedupMap);
 
       // Extrai datas disponíveis (únicas, ordenadas desc)
       const datasSet = new Set(coletaRawRows.map(r => r.dataCurta).filter(Boolean));
@@ -677,7 +684,7 @@
     let itens = estoqueData;
     if (estoqueBusca) {
       const q = estoqueBusca.toLowerCase();
-      itens = itens.filter(r => (r[iProd]||'').toLowerCase().includes(q) || (r[iSku]||'').toLowerCase().includes(q));
+      itens = itens.filter(r => (r[iProd]||'').toLowerCase().includes(q) || (r[iSku]||'').toLowerCase().includes(q) || (r[iMlb]||'').toLowerCase().includes(q));
     }
     if (estoqueFiltro === 'critico') itens = itens.filter(r => parseNum(r[iDias]) <= 7);
     if (estoqueFiltro === 'alerta')  itens = itens.filter(r => { const d=parseNum(r[iDias]); return d>7&&d<=20; });
@@ -695,6 +702,7 @@
     const rows = pageItens.map(r => {
       const prod = iProd >= 0 ? r[iProd] : '–';
       const sku  = iSku  >= 0 ? r[iSku]  : '–';
+      const mlb  = iMlb  >= 0 ? r[iMlb]  : '–';
       const disp = iDisp >= 0 ? r[iDisp] : '';
       const cam  = iCam  >= 0 ? r[iCam]  : '';
       const ent  = iEnt  >= 0 ? r[iEnt]  : '';
@@ -708,6 +716,7 @@
       return `<tr>
         <td><div class="cell-produto tip" data-tip="${prod}">${prod}</div></td>
         <td class="cell-mono">${!sku||sku==='N/A'?'<span class="cell-muted">–</span>':sku}</td>
+        ${iMlb>=0?`<td class="cell-mono">${mlb}</td>`:''}
         ${iDisp>=0?`<td class="cell-num">${fmt(disp)}</td>`:''}
         ${iVend>=0?`<td class="cell-num">${fmt(vendN)}</td>`:''}
         ${iVend>=0&&iDisp>=0?`<td style="min-width:130px">${miniBar(dispN, vendN, '')}</td>`:''}
@@ -746,6 +755,7 @@
         <table>
           <thead><tr>
             <th>Produto</th><th>SKU</th>
+            ${iMlb>=0?'<th>MLB</th>':''}
             ${iDisp>=0?'<th style="text-align:right">Disponível</th>':''}
             ${iVend>=0?'<th style="text-align:right">Vendas 30d</th>':''}
             ${iVend>=0&&iDisp>=0?'<th style="min-width:130px">Cobertura</th>':''}
