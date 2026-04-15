@@ -340,6 +340,9 @@
   <button class="tab" data-tab="estoque" onclick="switchTab('estoque')">
     <span class="tab-icon">⚠️</span> Alertas Estoque <span class="tab-badge" id="badge-estoque">–</span>
   </button>
+  <button class="tab" data-tab="nf" onclick="switchTab('nf')">
+    <span class="tab-icon">📄</span> Análise NF
+  </button>
 </nav>
 
 <!-- ── ABA: VENDAS COLETA CD ── -->
@@ -358,6 +361,54 @@
     <span class="updated-label" id="estoque-ts">–</span>
   </div>
   <div id="estoque-content"><div class="loading-box"><div class="spinner"></div><span>Buscando dados…</span></div></div>
+</div>
+
+<!-- ── ABA: ANÁLISE NF ── -->
+<div id="tab-nf" class="tab-content">
+  <div class="section-header">
+    <span class="section-title">Análise de Nota Fiscal vs Fulfillment</span>
+  </div>
+  <div id="nf-content">
+    <div style="max-width:800px">
+      <p style="color:var(--text2);font-size:0.85rem;margin-bottom:16px;line-height:1.6">
+        Arraste o arquivo XML da NF-e para a área abaixo, ou cole o conteúdo manualmente.
+        A ferramenta vai cruzar o código de barras (EAN) de cada produto com seus anúncios no Mercado Livre.
+      </p>
+      <div id="nf-drop-zone" style="
+        position:relative;width:100%;min-height:220px;background:var(--bg2);border:2px dashed var(--border2);
+        border-radius:10px;transition:border-color .2s, background .2s;
+      ">
+        <div id="nf-drop-overlay" style="
+          display:flex;flex-direction:column;align-items:center;justify-content:center;
+          position:absolute;inset:0;pointer-events:none;z-index:2;
+          color:var(--text3);font-size:0.85rem;gap:8px;transition:opacity .2s;
+        ">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.5">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/>
+          </svg>
+          <span>Arraste o arquivo XML aqui</span>
+          <span style="font-size:0.72rem;color:var(--text3)">ou cole o conteúdo abaixo</span>
+        </div>
+        <textarea id="nf-xml-input" style="
+          width:100%;height:220px;background:transparent;border:none;
+          color:var(--text);padding:14px;font-family:'Cascadia Code','Consolas',monospace;
+          font-size:0.78rem;resize:vertical;outline:none;position:relative;z-index:3;
+        " placeholder="" oninput="document.getElementById('nf-drop-overlay').style.opacity=this.value?'0':'1'"></textarea>
+      </div>
+      <div id="nf-file-info" style="font-size:0.75rem;color:var(--text3);margin-top:6px;display:none"></div>
+      <div style="display:flex;gap:10px;margin-top:12px;align-items:center">
+        <button class="btn" id="btn-analisar" onclick="analisarNF()" style="background:rgba(88,166,255,.15);border-color:rgba(88,166,255,.4);color:var(--blue);font-weight:600;padding:8px 22px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          Analisar
+        </button>
+        <button class="btn" onclick="document.getElementById('nf-xml-input').value='';document.getElementById('nf-resultado').innerHTML=''">
+          Limpar
+        </button>
+        <span id="nf-status" style="font-size:0.78rem;color:var(--text3)"></span>
+      </div>
+    </div>
+    <div id="nf-resultado" style="margin-top:24px"></div>
+  </div>
 </div>
 
 
@@ -776,6 +827,169 @@
     document.getElementById('last-refresh').textContent = 'Última atualização: ' + agora();
     btn.disabled = false;
     btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg> Atualizar`;
+  }
+
+  // ── ABA ANÁLISE NF — Drag & Drop ──────────────────────────────────────────
+  (function setupDropZone() {
+    const zone = document.getElementById('nf-drop-zone');
+    const input = document.getElementById('nf-xml-input');
+    const overlay = document.getElementById('nf-drop-overlay');
+    const fileInfo = document.getElementById('nf-file-info');
+    if (!zone) return;
+
+    function handleFile(file) {
+      if (!file.name.toLowerCase().endsWith('.xml')) {
+        alert('Por favor, arraste um arquivo .xml');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        input.value = e.target.result;
+        overlay.style.opacity = '0';
+        fileInfo.style.display = 'block';
+        fileInfo.textContent = `📎 ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+        zone.style.borderColor = 'var(--green)';
+        setTimeout(() => { zone.style.borderColor = 'var(--border2)'; }, 1500);
+      };
+      reader.readAsText(file);
+    }
+
+    ['dragenter','dragover'].forEach(ev => {
+      zone.addEventListener(ev, e => {
+        e.preventDefault(); e.stopPropagation();
+        zone.style.borderColor = 'var(--blue)';
+        zone.style.background = 'rgba(88,166,255,.05)';
+      });
+    });
+    ['dragleave','drop'].forEach(ev => {
+      zone.addEventListener(ev, e => {
+        e.preventDefault(); e.stopPropagation();
+        zone.style.borderColor = 'var(--border2)';
+        zone.style.background = 'var(--bg2)';
+      });
+    });
+    zone.addEventListener('drop', e => {
+      const file = e.dataTransfer.files[0];
+      if (file) handleFile(file);
+    });
+  })();
+
+  async function analisarNF() {
+    const xml = document.getElementById('nf-xml-input').value.trim();
+    if (!xml) { alert('Cole o XML da NF-e primeiro.'); return; }
+
+    const btn = document.getElementById('btn-analisar');
+    const status = document.getElementById('nf-status');
+    const resultado = document.getElementById('nf-resultado');
+
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner" style="width:13px;height:13px;border-width:2px"></div> Analisando…';
+    status.textContent = 'Consultando API do Mercado Livre…';
+    resultado.innerHTML = spinner();
+
+    try {
+      const res = await fetch('/api/analyze-nf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: xml,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro desconhecido');
+
+      renderNFResultado(data.resultados);
+      status.textContent = `Concluído às ${agora()}`;
+    } catch (e) {
+      resultado.innerHTML = empty('Erro: ' + e.message);
+      status.textContent = 'Erro na análise';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Analisar';
+    }
+  }
+
+  function renderNFResultado(resultados) {
+    const el = document.getElementById('nf-resultado');
+    if (!resultados || resultados.length === 0) {
+      el.innerHTML = empty('Nenhum produto com EAN válido encontrado no XML.');
+      return;
+    }
+
+    const total = resultados.length;
+    const comFull = resultados.filter(r => r.status === 'fulfillment');
+    const semFull = resultados.filter(r => r.status === 'sem_fulfillment');
+    const naoEnc = resultados.filter(r => r.status === 'nao_encontrado');
+    const totalSugestao = comFull.reduce((s, r) => s + (r.sugestaoEnvio || 0), 0);
+
+    const rows = resultados.map(r => {
+      let statusBadge, estoqueCell, vendasCell, diasCell, sugestaoCell;
+
+      if (r.status === 'fulfillment') {
+        statusBadge = '<span class="badge badge-ff">Fulfillment</span>';
+        estoqueCell = `<span style="color:var(--white);font-weight:600">${r.estoqueFull ?? '–'}</span>` +
+          (r.aCaminho ? `<br><span style="font-size:0.7rem;color:var(--text3)">+${r.aCaminho} a caminho</span>` : '');
+        vendasCell = r.vendas30d !== null ? fmt(r.vendas30d) : '–';
+        diasCell = r.diasEstoque !== null ? diasBadge(r.diasEstoque) : '–';
+        sugestaoCell = r.sugestaoEnvio !== null && r.sugestaoEnvio > 0
+          ? `<span style="color:var(--orange);font-weight:700;font-size:0.95rem">${fmt(r.sugestaoEnvio)}</span>`
+          : '<span style="color:var(--green)">OK</span>';
+      } else if (r.status === 'sem_fulfillment') {
+        statusBadge = '<span class="badge badge-cd">Sem Full</span>';
+        estoqueCell = '<span class="cell-muted">–</span>';
+        vendasCell = '<span class="cell-muted">–</span>';
+        diasCell = '<span class="cell-muted">–</span>';
+        sugestaoCell = '<span style="color:var(--yellow);font-size:0.75rem">Migrar p/ Full?</span>';
+      } else {
+        statusBadge = '<span class="badge badge-critico">Não encontrado</span>';
+        estoqueCell = '<span class="cell-muted">–</span>';
+        vendasCell = '<span class="cell-muted">–</span>';
+        diasCell = '<span class="cell-muted">–</span>';
+        sugestaoCell = '<span class="cell-muted">–</span>';
+      }
+
+      const mlbText = r.mlbIds && r.mlbIds.length > 0
+        ? r.mlbIds.map(id => `<a href="https://www.mercadolibre.com.br/p/${id}" target="_blank" style="color:var(--blue);text-decoration:none;font-size:0.75rem">${id}</a>`).join(', ')
+        : '<span class="cell-muted">–</span>';
+
+      return `<tr>
+        <td><div class="cell-produto tip" data-tip="${r.titulo || r.nome}">${r.titulo || r.nome}</div></td>
+        <td class="cell-mono" style="font-size:0.73rem">${r.ean}</td>
+        <td class="cell-num">${r.quantidade}</td>
+        <td>${statusBadge}</td>
+        <td>${mlbText}</td>
+        <td class="cell-num">${estoqueCell}</td>
+        <td class="cell-num">${vendasCell}</td>
+        <td>${diasCell}</td>
+        <td class="cell-num">${sugestaoCell}</td>
+      </tr>`;
+    }).join('');
+
+    el.innerHTML = `
+      <div class="cards-row">
+        <div class="card-stat accent-blue"><div class="label">Itens na NF</div><div class="value blue">${total}</div></div>
+        <div class="card-stat accent-green"><div class="label">Com Fulfillment</div><div class="value green">${comFull.length}</div></div>
+        <div class="card-stat accent-orange"><div class="label">Sem Fulfillment</div><div class="value orange">${semFull.length}</div></div>
+        <div class="card-stat accent-red"><div class="label">Não encontrados</div><div class="value red">${naoEnc.length}</div></div>
+        <div class="card-stat accent-purple"><div class="label">Sugestão envio total</div><div class="value purple">${fmt(totalSugestao)} un</div></div>
+      </div>
+
+      <div class="section-sep"><div class="sep-label">📋 Resultado da análise</div><hr></div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Produto</th>
+            <th>EAN</th>
+            <th style="text-align:right">Qtd NF</th>
+            <th>Status ML</th>
+            <th>MLB</th>
+            <th style="text-align:right">Estoque Full</th>
+            <th style="text-align:right">Vendas 30d</th>
+            <th>Dias Estoque</th>
+            <th style="text-align:right">Sugestão Envio</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
   }
 
   // ── Auto-refresh 5 min ────────────────────────────────────────────────────
