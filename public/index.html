@@ -951,6 +951,7 @@
         : '<span class="cell-muted">–</span>';
 
       return `<tr>
+        <td style="text-align:center"><input type="checkbox" class="nf-row-check" data-ean="${r.ean}" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></td>
         <td><div class="cell-produto tip" data-tip="${r.titulo || r.nome}">${r.titulo || r.nome}</div></td>
         <td class="cell-mono" style="font-size:0.73rem">${r.ean}</td>
         <td class="cell-num">${r.quantidade}</td>
@@ -974,9 +975,20 @@
 
       <div class="section-sep"><div class="sep-label">📋 Resultado da análise</div><hr></div>
 
+      <div class="toolbar" style="margin-bottom:12px">
+        <button class="btn" onclick="nfToggleAll(true)" style="font-size:0.75rem">✓ Selecionar todos</button>
+        <button class="btn" onclick="nfToggleAll(false)" style="font-size:0.75rem">✗ Limpar</button>
+        <button class="btn" id="btn-enviar-slack" onclick="enviarSlack()" style="background:rgba(63,185,80,.15);border-color:rgba(63,185,80,.4);color:var(--green);font-weight:600">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg>
+          Enviar para Slack
+        </button>
+        <span id="slack-status" style="font-size:0.78rem;color:var(--text3)"></span>
+      </div>
+
       <div class="table-wrap">
         <table>
           <thead><tr>
+            <th style="text-align:center;width:40px"><input type="checkbox" id="nf-check-all" onchange="nfToggleAll(this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></th>
             <th>Produto</th>
             <th>EAN</th>
             <th style="text-align:right">Qtd NF</th>
@@ -990,6 +1002,45 @@
           <tbody>${rows}</tbody>
         </table>
       </div>`;
+  }
+
+  function nfToggleAll(checked) {
+    document.querySelectorAll('.nf-row-check').forEach(cb => cb.checked = checked);
+    const headerCheck = document.getElementById('nf-check-all');
+    if (headerCheck) headerCheck.checked = checked;
+  }
+
+  async function enviarSlack() {
+    const checkboxes = document.querySelectorAll('.nf-row-check:checked');
+    if (checkboxes.length === 0) {
+      alert('Selecione pelo menos um EAN para enviar.');
+      return;
+    }
+    const eans = Array.from(checkboxes).map(cb => cb.dataset.ean);
+
+    const btn = document.getElementById('btn-enviar-slack');
+    const status = document.getElementById('slack-status');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner" style="width:13px;height:13px;border-width:2px"></div> Enviando…';
+    status.textContent = '';
+
+    try {
+      const res = await fetch('/api/send-slack', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eans }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro desconhecido');
+      status.textContent = `✓ ${data.count} EAN(s) enviados ao Slack`;
+      status.style.color = 'var(--green)';
+    } catch (e) {
+      status.textContent = '✗ Erro: ' + e.message;
+      status.style.color = 'var(--red)';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg> Enviar para Slack';
+    }
   }
 
   // ── Auto-refresh 5 min ────────────────────────────────────────────────────

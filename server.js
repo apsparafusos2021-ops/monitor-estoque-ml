@@ -370,6 +370,42 @@ app.post('/api/analyze-nf', async (req, res) => {
   }
 });
 
+// ── Endpoint de envio para Slack ──────────────────────────────────────────────
+app.post('/api/send-slack', async (req, res) => {
+  try {
+    const webhookUrl = process.env.SLACK_WEBHOOK_URL;
+    if (!webhookUrl) {
+      return res.status(500).json({ error: 'SLACK_WEBHOOK_URL não configurado' });
+    }
+
+    const { eans } = req.body;
+    if (!Array.isArray(eans) || eans.length === 0) {
+      return res.status(400).json({ error: 'Nenhum EAN selecionado' });
+    }
+
+    const text = eans.join('\n');
+    console.log(`[SLACK] Enviando ${eans.length} EAN(s)...`);
+
+    const r = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+
+    if (!r.ok) {
+      const errText = await r.text();
+      console.error('[SLACK] Erro:', r.status, errText);
+      return res.status(500).json({ error: `Slack respondeu ${r.status}: ${errText}` });
+    }
+
+    console.log('[SLACK] Enviado com sucesso');
+    res.json({ ok: true, count: eans.length });
+  } catch (e) {
+    console.error('[SLACK] Exceção:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Servidor rodando em http://localhost:${PORT}`);
 });
