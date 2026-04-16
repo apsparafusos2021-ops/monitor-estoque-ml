@@ -608,6 +608,7 @@
         ? `<span class="badge badge-ff">FF</span>`
         : `<span class="badge badge-cd">CD</span>`;
       return `<tr>
+        <td style="text-align:center"><input type="checkbox" class="coleta-row-check" data-mlb="${i.mlb}" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></td>
         <td><div class="cell-produto tip" data-tip="${i.prod}">${i.prod}</div></td>
         <td class="cell-mono">${i.sku === 'N/A' || !i.sku ? '<span class="cell-muted">–</span>' : i.sku}</td>
         <td class="cell-mono">${i.mlb}</td>
@@ -660,9 +661,20 @@
         <span class="row-count">${itens.length} resultados</span>
       </div>
 
+      <div class="toolbar" style="margin-bottom:12px">
+        <button class="btn" onclick="coletaToggleAll(true)" style="font-size:0.75rem">✓ Selecionar todos</button>
+        <button class="btn" onclick="coletaToggleAll(false)" style="font-size:0.75rem">✗ Limpar</button>
+        <button class="btn" id="btn-coleta-slack" onclick="enviarSlackGenerico('coleta')" style="background:rgba(63,185,80,.15);border-color:rgba(63,185,80,.4);color:var(--green);font-weight:600">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg>
+          Enviar para Slack
+        </button>
+        <span id="coleta-slack-status" style="font-size:0.78rem;color:var(--text3)"></span>
+      </div>
+
       <div class="table-wrap">
         <table>
           <thead><tr>
+            <th style="text-align:center;width:40px"><input type="checkbox" id="coleta-check-all" onchange="coletaToggleAll(this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></th>
             <th>Produto</th><th>SKU</th><th>MLB</th>
             <th style="text-align:right">Qtd. Total</th>
             <th>Logística</th>
@@ -671,6 +683,12 @@
         </table>
       </div>
       ${buildPagination(itens.length, coletaPage, `function(p){coletaPage=p;renderColeta();window.scrollTo(0,0)}`)}`;
+  }
+
+  function coletaToggleAll(checked) {
+    document.querySelectorAll('.coleta-row-check').forEach(cb => cb.checked = checked);
+    const headerCheck = document.getElementById('coleta-check-all');
+    if (headerCheck) headerCheck.checked = checked;
   }
 
   // ── ABA ESTOQUE ───────────────────────────────────────────────────────────
@@ -765,6 +783,7 @@
       const vendN = parseNum(vend) || 0;
 
       return `<tr>
+        <td style="text-align:center"><input type="checkbox" class="estoque-row-check" data-mlb="${mlb}" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></td>
         <td><div class="cell-produto tip" data-tip="${prod}">${prod}</div></td>
         <td class="cell-mono">${!sku||sku==='N/A'?'<span class="cell-muted">–</span>':sku}</td>
         ${iMlb>=0?`<td class="cell-mono">${mlb}</td>`:''}
@@ -802,9 +821,20 @@
         <span class="row-count">${itens.length} resultados</span>
       </div>
 
+      <div class="toolbar" style="margin-bottom:12px">
+        <button class="btn" onclick="estoqueToggleAll(true)" style="font-size:0.75rem">✓ Selecionar todos</button>
+        <button class="btn" onclick="estoqueToggleAll(false)" style="font-size:0.75rem">✗ Limpar</button>
+        <button class="btn" id="btn-estoque-slack" onclick="enviarSlackGenerico('estoque')" style="background:rgba(63,185,80,.15);border-color:rgba(63,185,80,.4);color:var(--green);font-weight:600">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg>
+          Enviar para Slack
+        </button>
+        <span id="estoque-slack-status" style="font-size:0.78rem;color:var(--text3)"></span>
+      </div>
+
       <div class="table-wrap">
         <table>
           <thead><tr>
+            <th style="text-align:center;width:40px"><input type="checkbox" id="estoque-check-all" onchange="estoqueToggleAll(this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></th>
             <th>Produto</th><th>SKU</th>
             ${iMlb>=0?'<th>MLB</th>':''}
             ${iDisp>=0?'<th style="text-align:right">Disponível</th>':''}
@@ -816,6 +846,50 @@
         </table>
       </div>
       ${buildPagination(itens.length, estoquePage, `function(p){estoquePage=p;renderEstoque();window.scrollTo(0,0)}`)}`;
+  }
+
+  function estoqueToggleAll(checked) {
+    document.querySelectorAll('.estoque-row-check').forEach(cb => cb.checked = checked);
+    const headerCheck = document.getElementById('estoque-check-all');
+    if (headerCheck) headerCheck.checked = checked;
+  }
+
+  // ── Função genérica de envio para Slack (Coleta + Estoque) ───────────────
+  async function enviarSlackGenerico(tipo) {
+    const sel = tipo === 'coleta' ? '.coleta-row-check' : '.estoque-row-check';
+    const btnId = tipo === 'coleta' ? 'btn-coleta-slack' : 'btn-estoque-slack';
+    const statusId = tipo === 'coleta' ? 'coleta-slack-status' : 'estoque-slack-status';
+
+    const checkboxes = document.querySelectorAll(sel + ':checked');
+    if (checkboxes.length === 0) {
+      alert('Selecione pelo menos um item para enviar.');
+      return;
+    }
+    const mlbs = Array.from(checkboxes).map(cb => cb.dataset.mlb).filter(Boolean);
+
+    const btn = document.getElementById(btnId);
+    const status = document.getElementById(statusId);
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner" style="width:13px;height:13px;border-width:2px"></div> Enviando…';
+    status.textContent = '';
+
+    try {
+      const res = await fetch('/api/send-slack', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eans: mlbs }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro desconhecido');
+      status.textContent = `✓ ${data.count} MLB(s) enviados ao Slack`;
+      status.style.color = 'var(--green)';
+    } catch (e) {
+      status.textContent = '✗ Erro: ' + e.message;
+      status.style.color = 'var(--red)';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg> Enviar para Slack';
+    }
   }
 
   // ── Refresh geral ─────────────────────────────────────────────────────────
