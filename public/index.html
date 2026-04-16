@@ -783,7 +783,7 @@
       const vendN = parseNum(vend) || 0;
 
       return `<tr>
-        <td style="text-align:center"><input type="checkbox" class="estoque-row-check" data-mlb="${mlb}" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></td>
+        <td style="text-align:center"><input type="checkbox" class="estoque-row-check" data-mlb="${mlb}" data-vend="${vendN}" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></td>
         <td><div class="cell-produto tip" data-tip="${prod}">${prod}</div></td>
         <td class="cell-mono">${!sku||sku==='N/A'?'<span class="cell-muted">–</span>':sku}</td>
         ${iMlb>=0?`<td class="cell-mono">${mlb}</td>`:''}
@@ -865,7 +865,17 @@
       alert('Selecione pelo menos um item para enviar.');
       return;
     }
-    const mlbs = Array.from(checkboxes).map(cb => cb.dataset.mlb).filter(Boolean);
+
+    let linhas;
+    if (tipo === 'estoque') {
+      linhas = Array.from(checkboxes).map(cb => {
+        const mlb = cb.dataset.mlb;
+        const vend = cb.dataset.vend || '0';
+        return `${mlb} - Vendas 30d: ${vend}`;
+      }).filter(l => l.startsWith('MLB') || l.startsWith('mlb') || /\d/.test(l));
+    } else {
+      linhas = Array.from(checkboxes).map(cb => cb.dataset.mlb).filter(Boolean);
+    }
 
     const btn = document.getElementById(btnId);
     const status = document.getElementById(statusId);
@@ -877,11 +887,11 @@
       const res = await fetch('/api/send-slack', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eans: mlbs }),
+        body: JSON.stringify({ eans: linhas }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erro desconhecido');
-      status.textContent = `✓ ${data.count} MLB(s) enviados ao Slack`;
+      status.textContent = `✓ ${data.count} item(ns) enviado(s) ao Slack`;
       status.style.color = 'var(--green)';
     } catch (e) {
       status.textContent = '✗ Erro: ' + e.message;
