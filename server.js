@@ -63,14 +63,43 @@ async function fetchComRetry(url, options, tentativas = 3) {
 }
 
 async function getToken() {
-  const r = await fetchComRetry(`${BASE}/oauth/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `grant_type=client_credentials&client_id=${CONFIG.clientId}&client_secret=${CONFIG.clientSecret}`
-  });
-  if (!r) return null;
-  const d = await r.json();
-  return d.access_token;
+  console.log('[AUTH] Iniciando autenticação ML...');
+  console.log('[AUTH] CLIENT_ID presente:', !!CONFIG.clientId, 'len:', CONFIG.clientId?.length);
+  console.log('[AUTH] CLIENT_SECRET presente:', !!CONFIG.clientSecret, 'len:', CONFIG.clientSecret?.length);
+  console.log('[AUTH] SELLER_ID:', CONFIG.sellerId);
+
+  if (!CONFIG.clientId || !CONFIG.clientSecret) {
+    console.error('[AUTH] Variáveis de ambiente ML_CLIENT_ID ou ML_CLIENT_SECRET não definidas');
+    return null;
+  }
+
+  try {
+    const body = new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: CONFIG.clientId,
+      client_secret: CONFIG.clientSecret,
+    }).toString();
+
+    const r = await fetchComRetry(`${BASE}/oauth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+    if (!r) {
+      console.error('[AUTH] Sem resposta do ML após retries');
+      return null;
+    }
+    const d = await r.json();
+    if (!r.ok) {
+      console.error('[AUTH] Erro do ML:', r.status, JSON.stringify(d));
+      return null;
+    }
+    console.log('[AUTH] Token obtido com sucesso');
+    return d.access_token;
+  } catch (e) {
+    console.error('[AUTH] Exceção:', e.message);
+    return null;
+  }
 }
 
 async function getAllSellerItems(token) {
