@@ -1,13 +1,18 @@
 const path = require('path');
 const fs = require('fs');
-// Tenta carregar .env de vários caminhos possíveis
+// Tenta carregar .env de vários caminhos possíveis (apenas em desenvolvimento local)
 const envPaths = [
   path.join(__dirname, '.env'),
   path.resolve(__dirname, '../../.env'),
   'C:\\monitor-estoque\\.env',
 ];
 const envPath = envPaths.find(p => { try { return fs.existsSync(p); } catch { return false; } });
-require('dotenv').config({ path: envPath });
+if (envPath) {
+  require('dotenv').config({ path: envPath });
+  console.log('[ENV] .env carregado de:', envPath);
+} else {
+  console.log('[ENV] Nenhum .env encontrado, usando variáveis do ambiente do sistema');
+}
 const express = require('express');
 const fetch = require('node-fetch');
 const { XMLParser } = require('fast-xml-parser');
