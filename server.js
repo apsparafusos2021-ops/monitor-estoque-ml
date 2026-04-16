@@ -20,6 +20,12 @@ const { XMLParser } = require('fast-xml-parser');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ── DEBUG: Lista todas variáveis ML_ e DASH_ disponíveis ───────────────────────
+console.log('[DEBUG] Variáveis de ambiente disponíveis:');
+const envKeys = Object.keys(process.env).filter(k => /^(ML_|DASH_|GOOGLE_|TELEGRAM_)/.test(k));
+console.log('[DEBUG] Encontradas:', envKeys.length, '->', envKeys.join(', '));
+console.log('[DEBUG] Total process.env keys:', Object.keys(process.env).length);
+
 // ── Autenticação básica ────────────────────────────────────────────────────────
 const DASH_USER = process.env.DASH_USER || '';
 const DASH_PASS = process.env.DASH_PASS || '';
