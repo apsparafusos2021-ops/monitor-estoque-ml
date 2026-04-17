@@ -453,37 +453,96 @@ async function tinyGetStock(productId, token) {
   return null;
 }
 
+// Busca GTIN/EAN de um item ML
+async function getMLItemGTIN(mlbId, mlToken) {
+  try {
+    const r = await fetchComRetry(
+      `${BASE}/items/${mlbId}?attributes=id,attributes`,
+      { headers: { Authorization: `Bearer ${mlToken}` } }
+    );
+    if (!r) return null;
+    const item = await r.json();
+    if (!item.attributes) return null;
+    for (const attr of item.attributes) {
+      if ((attr.id === 'GTIN' || attr.id === 'EAN') && attr.value_name) {
+        return String(attr.value_name).trim();
+      }
+    }
+  } catch (e) {
+    console.error('[ML] Erro GTIN de', mlbId, ':', e.message);
+  }
+  return null;
+}
+
 app.post('/api/tiny-stock', async (req, res) => {
   try {
     const token = process.env.TINY_API_TOKEN;
     if (!token) return res.status(500).json({ error: 'TINY_API_TOKEN não configurado' });
 
-    const { skus } = req.body;
-    if (!Array.isArray(skus) || skus.length === 0) {
-      return res.status(400).json({ error: 'Nenhum SKU fornecido' });
+    // Aceita formato novo {items:[{mlb,sku}]} OU antigo {skus:[...]}
+    let items = req.body.items;
+    if (!Array.isArray(items)) {
+      if (Array.isArray(req.body.skus)) {
+        items = req.body.skus.map(sku => ({ mlb: sku, sku }));
+      } else {
+        return res.status(400).json({ error: 'Nenhum item fornecido' });
+      }
+    }
+    if (items.length === 0) return res.status(400).json({ error: 'Lista vazia' });
+
+    console.log(`[TINY] Buscando estoque de ${items.length} itens...`);
+
+    // Token ML (só se precisar de fallback por GTIN)
+    let mlToken = null;
+    const needsMlLookup = items.some(i => !i.sku || i.sku === 'N/A' || i.sku === '–');
+    if (needsMlLookup) {
+      mlToken = await getToken();
+      if (!mlToken) console.warn('[TINY] ML token indisponível para fallback GTIN');
     }
 
-    console.log(`[TINY] Buscando estoque de ${skus.length} SKUs...`);
-    const resultados = {};
+    const resultados = {}; // keyed by mlb
+    const codigoCache = {}; // codigo (sku ou gtin) -> stock (para evitar req duplicadas)
 
     // Rate limit: 2 req/segundo para ficar dentro de 30/min
-    for (const sku of skus) {
-      if (!sku || sku === 'N/A' || sku === '–') {
-        resultados[sku] = null;
+    for (const item of items) {
+      const mlb = item.mlb;
+      if (!mlb) continue;
+
+      let codigo = item.sku && item.sku !== 'N/A' && item.sku !== '–' ? item.sku : null;
+
+      // Fallback: busca GTIN via ML API
+      if (!codigo && mlToken && mlb.startsWith('MLB')) {
+        await sleep(300);
+        codigo = await getMLItemGTIN(mlb, mlToken);
+        if (codigo) console.log(`[TINY] ${mlb}: sem SKU, usando GTIN ${codigo}`);
+      }
+
+      if (!codigo) {
+        resultados[mlb] = null;
         continue;
       }
+
+      // Usa cache se já consultamos esse código
+      if (codigoCache[codigo] !== undefined) {
+        resultados[mlb] = codigoCache[codigo];
+        continue;
+      }
+
       await sleep(500);
-      const productId = await tinySearchProductId(sku, token);
+      const productId = await tinySearchProductId(codigo, token);
       if (!productId) {
-        resultados[sku] = null;
+        codigoCache[codigo] = null;
+        resultados[mlb] = null;
         continue;
       }
       await sleep(500);
       const stock = await tinyGetStock(productId, token);
-      resultados[sku] = stock;
+      codigoCache[codigo] = stock;
+      resultados[mlb] = stock;
     }
 
-    console.log(`[TINY] Concluído. ${Object.values(resultados).filter(v => v !== null).length}/${skus.length} encontrados`);
+    const ok = Object.values(resultados).filter(v => v !== null).length;
+    console.log(`[TINY] Concluído. ${ok}/${items.length} encontrados`);
     res.json({ estoques: resultados });
   } catch (e) {
     console.error('[TINY] Erro:', e.message);

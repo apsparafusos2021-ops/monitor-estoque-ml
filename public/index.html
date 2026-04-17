@@ -607,7 +607,7 @@
       const logBadge = i.log.includes('fulfillment')
         ? `<span class="badge badge-ff">FF</span>`
         : `<span class="badge badge-cd">CD</span>`;
-      const tinyEstoque = tinyStockMap[i.sku];
+      const tinyEstoque = tinyStockMap[i.mlb];
       const tinyCell = tinyEstoque === undefined
         ? '<span class="cell-muted">–</span>'
         : tinyEstoque === null
@@ -798,7 +798,7 @@
       const dispN = parseNum(disp) || 0;
       const vendN = parseNum(vend) || 0;
 
-      const tinyEstoque = tinyStockMap[sku];
+      const tinyEstoque = tinyStockMap[mlb];
       const tinyCell = tinyEstoque === undefined
         ? '<span class="cell-muted">–</span>'
         : tinyEstoque === null
@@ -893,30 +893,33 @@
     const btnId = tipo === 'coleta' ? 'btn-coleta-tiny' : 'btn-estoque-tiny';
     const btn = document.getElementById(btnId);
 
-    // Coleta SKUs únicos visíveis na tabela (da página atual)
+    // Coleta {mlb, sku} de todos os itens visíveis
     const checkboxes = document.querySelectorAll(sel);
-    const skus = [...new Set(Array.from(checkboxes).map(cb => cb.dataset.sku).filter(s => s && s !== 'N/A' && s !== '–'))];
+    const items = Array.from(checkboxes).map(cb => ({
+      mlb: cb.dataset.mlb,
+      sku: cb.dataset.sku || ''
+    })).filter(x => x.mlb);
 
-    if (skus.length === 0) {
-      alert('Nenhum SKU válido para buscar no Tiny.');
+    if (items.length === 0) {
+      alert('Nenhum item para buscar no Tiny.');
       return;
     }
 
     btn.disabled = true;
-    btn.innerHTML = `<div class="spinner" style="width:13px;height:13px;border-width:2px"></div> Carregando ${skus.length} SKUs…`;
+    btn.innerHTML = `<div class="spinner" style="width:13px;height:13px;border-width:2px"></div> Carregando ${items.length} itens…`;
 
     try {
       const res = await fetch('/api/tiny-stock', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skus }),
+        body: JSON.stringify({ items }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erro desconhecido');
 
-      // Atualiza o mapa global com os disponíveis
-      for (const [sku, stock] of Object.entries(data.estoques)) {
-        tinyStockMap[sku] = stock ? stock.disponivel : null;
+      // Atualiza o mapa global (agora indexado por MLB)
+      for (const [mlb, stock] of Object.entries(data.estoques)) {
+        tinyStockMap[mlb] = stock ? stock.disponivel : null;
       }
 
       // Re-renderiza a tabela para mostrar os estoques
