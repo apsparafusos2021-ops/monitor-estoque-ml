@@ -492,52 +492,36 @@ app.post('/api/tiny-stock', async (req, res) => {
 
     console.log(`[TINY] Buscando estoque de ${items.length} itens...`);
 
-    // Token ML (só se precisar de fallback por GTIN)
-    let mlToken = null;
-    const needsMlLookup = items.some(i => !i.sku || i.sku === 'N/A' || i.sku === '–');
-    if (needsMlLookup) {
-      mlToken = await getToken();
-      if (!mlToken) console.warn('[TINY] ML token indisponível para fallback GTIN');
-    }
-
     const resultados = {}; // keyed by mlb
-    const codigoCache = {}; // codigo (sku ou gtin) -> stock (para evitar req duplicadas)
+    const skuCache = {}; // sku -> stock (para evitar req duplicadas)
 
     // Rate limit: 2 req/segundo para ficar dentro de 30/min
     for (const item of items) {
       const mlb = item.mlb;
       if (!mlb) continue;
 
-      let codigo = item.sku && item.sku !== 'N/A' && item.sku !== '–' ? item.sku : null;
-
-      // Fallback: busca GTIN via ML API
-      if (!codigo && mlToken && mlb.startsWith('MLB')) {
-        await sleep(300);
-        codigo = await getMLItemGTIN(mlb, mlToken);
-        if (codigo) console.log(`[TINY] ${mlb}: sem SKU, usando GTIN ${codigo}`);
-      }
-
-      if (!codigo) {
+      const sku = item.sku && item.sku !== 'N/A' && item.sku !== '–' ? item.sku : null;
+      if (!sku) {
         resultados[mlb] = null;
         continue;
       }
 
-      // Usa cache se já consultamos esse código
-      if (codigoCache[codigo] !== undefined) {
-        resultados[mlb] = codigoCache[codigo];
+      // Usa cache se já consultamos esse SKU
+      if (skuCache[sku] !== undefined) {
+        resultados[mlb] = skuCache[sku];
         continue;
       }
 
       await sleep(500);
-      const productId = await tinySearchProductId(codigo, token);
+      const productId = await tinySearchProductId(sku, token);
       if (!productId) {
-        codigoCache[codigo] = null;
+        skuCache[sku] = null;
         resultados[mlb] = null;
         continue;
       }
       await sleep(500);
       const stock = await tinyGetStock(productId, token);
-      codigoCache[codigo] = stock;
+      skuCache[sku] = stock;
       resultados[mlb] = stock;
     }
 
