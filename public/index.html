@@ -607,11 +607,19 @@
       const logBadge = i.log.includes('fulfillment')
         ? `<span class="badge badge-ff">FF</span>`
         : `<span class="badge badge-cd">CD</span>`;
+      const tinyEstoque = tinyStockMap[i.sku];
+      const tinyCell = tinyEstoque === undefined
+        ? '<span class="cell-muted">–</span>'
+        : tinyEstoque === null
+          ? '<span class="cell-muted" title="Não encontrado no Tiny">?</span>'
+          : `<span style="color:var(--white);font-weight:600">${fmt(tinyEstoque)}</span>`;
       return `<tr>
-        <td style="text-align:center"><input type="checkbox" class="coleta-row-check" data-mlb="${i.mlb}" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></td>
+        <td style="text-align:center"><input type="checkbox" class="coleta-row-check" data-mlb="${i.mlb}" data-sku="${i.sku}" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></td>
         <td><div class="cell-produto tip" data-tip="${i.prod}">${i.prod}</div></td>
+        <td class="cell-num">${tinyCell}</td>
         <td class="cell-mono">${i.sku === 'N/A' || !i.sku ? '<span class="cell-muted">–</span>' : i.sku}</td>
         <td class="cell-mono">${i.mlb}</td>
+        <td><input type="number" class="coleta-row-qty" data-mlb="${i.mlb}" min="0" placeholder="0" style="width:70px;background:var(--bg2);border:1px solid var(--border2);color:var(--text);padding:4px 8px;border-radius:6px;font-size:0.8rem;text-align:right;outline:none"></td>
         <td class="cell-num">${fmt(i.qtd)}</td>
         <td>${logBadge}</td>
       </tr>`;
@@ -664,6 +672,10 @@
       <div class="toolbar" style="margin-bottom:12px">
         <button class="btn" onclick="coletaToggleAll(true)" style="font-size:0.75rem">✓ Selecionar todos</button>
         <button class="btn" onclick="coletaToggleAll(false)" style="font-size:0.75rem">✗ Limpar</button>
+        <button class="btn" id="btn-coleta-tiny" onclick="carregarEstoqueTiny('coleta')" style="background:rgba(240,136,62,.15);border-color:rgba(240,136,62,.4);color:var(--orange);font-weight:600">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c2.5 0 4-4 4-9s-1.5-9-4-9m0 18c-2.5 0-4-4-4-9s1.5-9 4-9"/></svg>
+          Carregar Estoque Tiny
+        </button>
         <button class="btn" id="btn-coleta-slack" onclick="enviarSlackGenerico('coleta')" style="background:rgba(63,185,80,.15);border-color:rgba(63,185,80,.4);color:var(--green);font-weight:600">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg>
           Enviar para Slack
@@ -675,7 +687,11 @@
         <table>
           <thead><tr>
             <th style="text-align:center;width:40px"><input type="checkbox" id="coleta-check-all" onchange="coletaToggleAll(this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></th>
-            <th>Produto</th><th>SKU</th><th>MLB</th>
+            <th>Produto</th>
+            <th style="text-align:right">Estoque Tiny</th>
+            <th>SKU</th>
+            <th>MLB</th>
+            <th style="width:90px">Qtd Enviar</th>
             <th style="text-align:right">Qtd. Total</th>
             <th>Logística</th>
           </tr></thead>
@@ -782,11 +798,19 @@
       const dispN = parseNum(disp) || 0;
       const vendN = parseNum(vend) || 0;
 
+      const tinyEstoque = tinyStockMap[sku];
+      const tinyCell = tinyEstoque === undefined
+        ? '<span class="cell-muted">–</span>'
+        : tinyEstoque === null
+          ? '<span class="cell-muted" title="Não encontrado no Tiny">?</span>'
+          : `<span style="color:var(--white);font-weight:600">${fmt(tinyEstoque)}</span>`;
       return `<tr>
-        <td style="text-align:center"><input type="checkbox" class="estoque-row-check" data-mlb="${mlb}" data-vend="${vendN}" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></td>
+        <td style="text-align:center"><input type="checkbox" class="estoque-row-check" data-mlb="${mlb}" data-sku="${sku}" data-vend="${vendN}" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></td>
         <td><div class="cell-produto tip" data-tip="${prod}">${prod}</div></td>
+        <td class="cell-num">${tinyCell}</td>
         <td class="cell-mono">${!sku||sku==='N/A'?'<span class="cell-muted">–</span>':sku}</td>
         ${iMlb>=0?`<td class="cell-mono">${mlb}</td>`:''}
+        <td><input type="number" class="estoque-row-qty" data-mlb="${mlb}" min="0" placeholder="0" style="width:70px;background:var(--bg2);border:1px solid var(--border2);color:var(--text);padding:4px 8px;border-radius:6px;font-size:0.8rem;text-align:right;outline:none"></td>
         ${iDisp>=0?`<td class="cell-num">${fmt(disp)}</td>`:''}
         ${iVend>=0?`<td class="cell-num">${fmt(vendN)}</td>`:''}
         ${iVend>=0&&iDisp>=0?`<td style="min-width:130px">${miniBar(dispN, vendN, '')}</td>`:''}
@@ -824,6 +848,10 @@
       <div class="toolbar" style="margin-bottom:12px">
         <button class="btn" onclick="estoqueToggleAll(true)" style="font-size:0.75rem">✓ Selecionar todos</button>
         <button class="btn" onclick="estoqueToggleAll(false)" style="font-size:0.75rem">✗ Limpar</button>
+        <button class="btn" id="btn-estoque-tiny" onclick="carregarEstoqueTiny('estoque')" style="background:rgba(240,136,62,.15);border-color:rgba(240,136,62,.4);color:var(--orange);font-weight:600">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c2.5 0 4-4 4-9s-1.5-9-4-9m0 18c-2.5 0-4-4-4-9s1.5-9 4-9"/></svg>
+          Carregar Estoque Tiny
+        </button>
         <button class="btn" id="btn-estoque-slack" onclick="enviarSlackGenerico('estoque')" style="background:rgba(63,185,80,.15);border-color:rgba(63,185,80,.4);color:var(--green);font-weight:600">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg>
           Enviar para Slack
@@ -835,8 +863,11 @@
         <table>
           <thead><tr>
             <th style="text-align:center;width:40px"><input type="checkbox" id="estoque-check-all" onchange="estoqueToggleAll(this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></th>
-            <th>Produto</th><th>SKU</th>
+            <th>Produto</th>
+            <th style="text-align:right">Estoque Tiny</th>
+            <th>SKU</th>
             ${iMlb>=0?'<th>MLB</th>':''}
+            <th style="width:90px">Qtd Enviar</th>
             ${iDisp>=0?'<th style="text-align:right">Disponível</th>':''}
             ${iVend>=0?'<th style="text-align:right">Vendas 30d</th>':''}
             ${iVend>=0&&iDisp>=0?'<th style="min-width:130px">Cobertura</th>':''}
@@ -854,9 +885,55 @@
     if (headerCheck) headerCheck.checked = checked;
   }
 
+  // ── Mapa de estoque Tiny (sku -> disponivel) ──────────────────────────────
+  let tinyStockMap = {};
+
+  async function carregarEstoqueTiny(tipo) {
+    const sel = tipo === 'coleta' ? '.coleta-row-check' : '.estoque-row-check';
+    const btnId = tipo === 'coleta' ? 'btn-coleta-tiny' : 'btn-estoque-tiny';
+    const btn = document.getElementById(btnId);
+
+    // Coleta SKUs únicos visíveis na tabela (da página atual)
+    const checkboxes = document.querySelectorAll(sel);
+    const skus = [...new Set(Array.from(checkboxes).map(cb => cb.dataset.sku).filter(s => s && s !== 'N/A' && s !== '–'))];
+
+    if (skus.length === 0) {
+      alert('Nenhum SKU válido para buscar no Tiny.');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = `<div class="spinner" style="width:13px;height:13px;border-width:2px"></div> Carregando ${skus.length} SKUs…`;
+
+    try {
+      const res = await fetch('/api/tiny-stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skus }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro desconhecido');
+
+      // Atualiza o mapa global com os disponíveis
+      for (const [sku, stock] of Object.entries(data.estoques)) {
+        tinyStockMap[sku] = stock ? stock.disponivel : null;
+      }
+
+      // Re-renderiza a tabela para mostrar os estoques
+      if (tipo === 'coleta') renderColeta();
+      else renderEstoque();
+    } catch (e) {
+      alert('Erro ao buscar estoque: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c2.5 0 4-4 4-9s-1.5-9-4-9m0 18c-2.5 0-4-4-4-9s1.5-9 4-9"/></svg> Carregar Estoque Tiny';
+    }
+  }
+
   // ── Função genérica de envio para Slack (Coleta + Estoque) ───────────────
   async function enviarSlackGenerico(tipo) {
     const sel = tipo === 'coleta' ? '.coleta-row-check' : '.estoque-row-check';
+    const qtySel = tipo === 'coleta' ? '.coleta-row-qty' : '.estoque-row-qty';
     const btnId = tipo === 'coleta' ? 'btn-coleta-slack' : 'btn-estoque-slack';
     const statusId = tipo === 'coleta' ? 'coleta-slack-status' : 'estoque-slack-status';
 
@@ -866,16 +943,26 @@
       return;
     }
 
-    let linhas;
-    if (tipo === 'estoque') {
-      linhas = Array.from(checkboxes).map(cb => {
-        const mlb = cb.dataset.mlb;
+    // Mapa de MLB -> quantidade digitada
+    const qtyMap = {};
+    document.querySelectorAll(qtySel).forEach(inp => {
+      const mlb = inp.dataset.mlb;
+      const val = inp.value && Number(inp.value) > 0 ? inp.value : '';
+      if (mlb && val) qtyMap[mlb] = val;
+    });
+
+    const linhas = Array.from(checkboxes).map(cb => {
+      const mlb = cb.dataset.mlb;
+      const qtd = qtyMap[mlb];
+      if (tipo === 'estoque') {
         const vend = cb.dataset.vend || '0';
+        if (qtd) return `${mlb} - Qtd envio: ${qtd} | Vendas 30d: ${vend}`;
         return `${mlb} - Vendas 30d: ${vend}`;
-      }).filter(l => l.startsWith('MLB') || l.startsWith('mlb') || /\d/.test(l));
-    } else {
-      linhas = Array.from(checkboxes).map(cb => cb.dataset.mlb).filter(Boolean);
-    }
+      } else {
+        if (qtd) return `${mlb} - Qtd envio: ${qtd}`;
+        return mlb;
+      }
+    }).filter(Boolean);
 
     const btn = document.getElementById(btnId);
     const status = document.getElementById(statusId);

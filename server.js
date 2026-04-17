@@ -406,6 +406,91 @@ app.post('/api/send-slack', async (req, res) => {
   }
 });
 
+// ── Endpoint para buscar estoque no Tiny ERP ──────────────────────────────────
+// Cache em memória para não buscar o ID do produto toda vez
+const tinyProductIdCache = {};
+
+async function tinySearchProductId(sku, token) {
+  if (tinyProductIdCache[sku]) return tinyProductIdCache[sku];
+  try {
+    const params = new URLSearchParams({ token, pesquisa: sku, formato: 'json' }).toString();
+    const r = await fetch('https://api.tiny.com.br/api2/produtos.pesquisa.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params,
+    });
+    const d = await r.json();
+    if (d.retorno?.status === 'OK' && d.retorno.produtos?.length > 0) {
+      // Busca o produto que tem o código EXATO (não parcial)
+      const produto = d.retorno.produtos.find(p => p.produto.codigo === sku)?.produto
+                   || d.retorno.produtos[0].produto;
+      tinyProductIdCache[sku] = produto.id;
+      return produto.id;
+    }
+  } catch (e) {
+    console.error('[TINY] Erro busca SKU', sku, ':', e.message);
+  }
+  return null;
+}
+
+async function tinyGetStock(productId, token) {
+  try {
+    const params = new URLSearchParams({ token, id: productId, formato: 'json' }).toString();
+    const r = await fetch('https://api.tiny.com.br/api2/produto.obter.estoque.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params,
+    });
+    const d = await r.json();
+    if (d.retorno?.status === 'OK' && d.retorno.produto) {
+      const saldo = Number(d.retorno.produto.saldo || 0);
+      const reservado = Number(d.retorno.produto.saldoReservado || 0);
+      return { saldo, reservado, disponivel: saldo - reservado };
+    }
+  } catch (e) {
+    console.error('[TINY] Erro estoque ID', productId, ':', e.message);
+  }
+  return null;
+}
+
+app.post('/api/tiny-stock', async (req, res) => {
+  try {
+    const token = process.env.TINY_API_TOKEN;
+    if (!token) return res.status(500).json({ error: 'TINY_API_TOKEN não configurado' });
+
+    const { skus } = req.body;
+    if (!Array.isArray(skus) || skus.length === 0) {
+      return res.status(400).json({ error: 'Nenhum SKU fornecido' });
+    }
+
+    console.log(`[TINY] Buscando estoque de ${skus.length} SKUs...`);
+    const resultados = {};
+
+    // Rate limit: 2 req/segundo para ficar dentro de 30/min
+    for (const sku of skus) {
+      if (!sku || sku === 'N/A' || sku === '–') {
+        resultados[sku] = null;
+        continue;
+      }
+      await sleep(500);
+      const productId = await tinySearchProductId(sku, token);
+      if (!productId) {
+        resultados[sku] = null;
+        continue;
+      }
+      await sleep(500);
+      const stock = await tinyGetStock(productId, token);
+      resultados[sku] = stock;
+    }
+
+    console.log(`[TINY] Concluído. ${Object.values(resultados).filter(v => v !== null).length}/${skus.length} encontrados`);
+    res.json({ estoques: resultados });
+  } catch (e) {
+    console.error('[TINY] Erro:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Servidor rodando em http://localhost:${PORT}`);
 });
