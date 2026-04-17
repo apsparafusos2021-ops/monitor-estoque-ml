@@ -325,7 +325,7 @@
     </div>
   </div>
   <div class="header-right">
-    <span class="auto-badge"><span class="pulse"></span> Auto-refresh 5 min</span>
+    <span class="auto-badge" style="color:var(--text3);border-color:var(--border2);background:var(--bg2)"><span class="pulse" style="background:var(--text3);animation:none"></span> Manual</span>
     <button class="btn" id="btn-refresh" onclick="refreshTudo()">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
       Atualizar
@@ -1131,6 +1131,7 @@
         <td class="cell-num">${r.quantidade}</td>
         <td>${statusBadge}</td>
         <td>${mlbText}</td>
+        <td><input type="number" class="nf-row-qty" data-ean="${r.ean}" min="0" placeholder="0" style="width:70px;background:var(--bg2);border:1px solid var(--border2);color:var(--text);padding:4px 8px;border-radius:6px;font-size:0.8rem;text-align:right;outline:none"></td>
         <td class="cell-num">${estoqueCell}</td>
         <td class="cell-num">${vendasCell}</td>
         <td>${diasCell}</td>
@@ -1168,6 +1169,7 @@
             <th style="text-align:right">Qtd NF</th>
             <th>Status ML</th>
             <th>MLB</th>
+            <th style="width:90px">Qtd Enviar</th>
             <th style="text-align:right">Estoque Full</th>
             <th style="text-align:right">Vendas 30d</th>
             <th>Dias Estoque</th>
@@ -1190,7 +1192,20 @@
       alert('Selecione pelo menos um EAN para enviar.');
       return;
     }
-    const eans = Array.from(checkboxes).map(cb => cb.dataset.ean);
+
+    // Mapa de EAN -> quantidade digitada
+    const qtyMap = {};
+    document.querySelectorAll('.nf-row-qty').forEach(inp => {
+      const ean = inp.dataset.ean;
+      const val = inp.value && Number(inp.value) > 0 ? inp.value : '';
+      if (ean && val) qtyMap[ean] = val;
+    });
+
+    const linhas = Array.from(checkboxes).map(cb => {
+      const ean = cb.dataset.ean;
+      const qtd = qtyMap[ean];
+      return qtd ? `${ean} - Qtd envio: ${qtd}` : ean;
+    });
 
     const btn = document.getElementById('btn-enviar-slack');
     const status = document.getElementById('slack-status');
@@ -1202,7 +1217,7 @@
       const res = await fetch('/api/send-slack', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eans }),
+        body: JSON.stringify({ eans: linhas }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erro desconhecido');
@@ -1217,8 +1232,7 @@
     }
   }
 
-  // ── Auto-refresh 5 min ────────────────────────────────────────────────────
-  setInterval(refreshTudo, 5 * 60 * 1000);
+  // ── Auto-refresh removido: só atualiza ao clicar no botão Atualizar ──────
 
   // ── Init ──────────────────────────────────────────────────────────────────
   (async () => {
