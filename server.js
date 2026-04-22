@@ -630,6 +630,66 @@ app.post('/api/inbound-parse', upload.single('pdf'), async (req, res) => {
   }
 });
 
+// ── Geração de ZPL no formato ML (Zebra Programming Language) ────────────────
+// Codifica string para o formato hex usado pelo ZPL com ^FH (ex: é → _C3_A9)
+function encodeZplText(str) {
+  if (!str) return '';
+  let out = '';
+  const buf = Buffer.from(String(str), 'utf-8');
+  for (const byte of buf) {
+    if (byte < 0x20 || byte > 0x7E || byte === 0x5E /* ^ */ || byte === 0x7E /* ~ */ || byte === 0x5C /* \ */ || byte === 0x5F /* _ */) {
+      out += '_' + byte.toString(16).toUpperCase().padStart(2, '0');
+    } else {
+      out += String.fromCharCode(byte);
+    }
+  }
+  return out;
+}
+
+// Gera 1 bloco ZPL com 2 etiquetas lado a lado (igual ML)
+function gerarBlocoZpl(inventoryId, title, sku) {
+  const tituloEnc = encodeZplText(title);
+  const skuEnc = encodeZplText(`SKU: ${sku || ''}`);
+  return `^XA^CI28
+^LH0,0
+^FO30,15^BY2,,0^BCN,54,N,N^FD${inventoryId}^FS
+^FO105,75^A0N,20,25^FH^FD${inventoryId}^FS
+^FO105,76^A0N,20,25^FH^FD${inventoryId}^FS
+^FO16,115^A0N,18,18^FB300,2,2,L^FH^FD${tituloEnc}^FS
+^FO16,153^A0N,18,18^FB300,1,0,L^FH^FD^FS
+^FO15,153^A0N,18,18^FB300,1,0,L^FH^FD^FS
+^FO16,172^A0N,18,18^FH^FD${skuEnc}
+^FS
+^CI28
+^LH0,0
+^FO350,15^BY2,,0^BCN,54,N,N^FD${inventoryId}^FS
+^FO425,75^A0N,20,25^FH^FD${inventoryId}^FS
+^FO425,76^A0N,20,25^FH^FD${inventoryId}^FS
+^FO346,115^A0N,18,18^FB300,2,2,L^FH^FD${tituloEnc}^FS
+^FO346,153^A0N,18,18^FB300,1,0,L^FH^FD^FS
+^FO345,153^A0N,18,18^FB300,1,0,L^FH^FD^FS
+^FO346,172^A0N,18,18^FH^FD${skuEnc}
+^FS
+^XZ
+`;
+}
+
+app.post('/api/generate-zpl', (req, res) => {
+  try {
+    const { inventoryId, title, sku, linhas } = req.body || {};
+    if (!inventoryId) return res.status(400).json({ error: 'inventoryId obrigatório' });
+    const n = Math.max(1, Math.min(500, parseInt(linhas) || 1));
+    let zpl = '';
+    for (let i = 0; i < n; i++) zpl += gerarBlocoZpl(inventoryId, title || '', sku || '');
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="Etiquetas-${inventoryId}.txt"`);
+    res.send(zpl);
+  } catch (e) {
+    console.error('[ZPL] Erro:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Servidor rodando em http://localhost:${PORT}`);
 });
