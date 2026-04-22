@@ -1,3 +1,9 @@
-[deploy]
-startCommand = "node server.js"
-restartPolicyType = "on_failure"
+[[services]]
+name = "monitor-estoque-ml"
+cronSchedule = "0 12 * * *"
+startCommand = "node monitor_coleta.js"
+
+[[services]]
+name = "monitor-estoque"
+cronSchedule = "30 12 * * *"
+startCommand = "node monitor.js"
