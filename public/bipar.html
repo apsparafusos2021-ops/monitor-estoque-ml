@@ -19,20 +19,33 @@
   h1 { font-size: 1rem; font-weight: 600; color: var(--white); }
   .sub { font-size: 0.72rem; color: var(--text3); margin-top: 1px; }
   .header-right { display: flex; align-items: center; gap: 8px; }
-  .btn { background: var(--bg2); border: 1px solid var(--border2); color: var(--text); padding: 6px 14px; border-radius: 7px; cursor: pointer; font-size: 0.78rem; transition: background .15s, border-color .15s; display: flex; align-items: center; gap: 5px; }
+  .btn { background: var(--bg2); border: 1px solid var(--border2); color: var(--text); padding: 6px 14px; border-radius: 7px; cursor: pointer; font-size: 0.78rem; transition: background .15s, border-color .15s; display: inline-flex; align-items: center; gap: 5px; text-decoration: none; }
   .btn:hover { background: var(--border2); border-color: #484f58; }
   .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-primary { background: rgba(88,166,255,.15); border-color: rgba(88,166,255,.4); color: var(--blue); font-weight: 600; }
+  .btn-danger { background: rgba(248,81,73,.1); border-color: rgba(248,81,73,.3); color: var(--red); }
 
-  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
-  .badge-cache { background: rgba(63,185,80,.1); color: var(--green); border: 1px solid rgba(63,185,80,.25); }
-  .badge-cache.loading { background: rgba(210,153,34,.1); color: var(--yellow); border-color: rgba(210,153,34,.25); }
-  .pulse { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .badge-inbound { font-size: 0.78rem; color: var(--orange); background: rgba(240,136,62,.1); border: 1px solid rgba(240,136,62,.3); padding: 4px 10px; border-radius: 20px; font-weight: 600; }
 
-  .container { max-width: 1100px; margin: 0 auto; padding: 24px 28px; display: grid; grid-template-columns: 1fr 320px; gap: 24px; }
-  @media (max-width: 800px) { .container { grid-template-columns: 1fr; } }
+  .container { max-width: 1300px; margin: 0 auto; padding: 24px 28px; }
 
-  .scan-area { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 32px; }
+  /* ── Upload state ── */
+  .upload-area {
+    background: var(--bg2); border: 2px dashed var(--border2);
+    border-radius: 14px; padding: 60px 32px; text-align: center;
+    transition: border-color .15s, background .15s;
+  }
+  .upload-area.drag { border-color: var(--blue); background: rgba(88,166,255,.05); }
+  .upload-icon { font-size: 3rem; margin-bottom: 12px; opacity: .6; }
+  .upload-title { font-size: 1.1rem; font-weight: 600; color: var(--white); margin-bottom: 6px; }
+  .upload-sub { font-size: 0.85rem; color: var(--text2); margin-bottom: 20px; }
+  .upload-input { display: none; }
+
+  /* ── Working state ── */
+  .grid { display: grid; grid-template-columns: 1fr 380px; gap: 20px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  .scan-area { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 28px; }
   .scan-label { font-size: 0.72rem; color: var(--text2); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 8px; }
   .scan-input {
     width: 100%; background: var(--bg); border: 2px solid var(--border2);
@@ -49,7 +62,7 @@
   .qty-input { width: 60px; background: var(--bg); border: 1px solid var(--border2); color: var(--white); padding: 6px 10px; border-radius: 7px; font-size: 0.95rem; text-align: center; outline: none; font-weight: 600; }
   .qty-input:focus { border-color: var(--blue); }
 
-  .feedback { margin-top: 24px; padding: 20px; border-radius: 10px; min-height: 80px; display: flex; align-items: center; justify-content: center; text-align: center; transition: all .2s; }
+  .feedback { margin-top: 22px; padding: 20px; border-radius: 10px; min-height: 90px; display: flex; align-items: center; justify-content: center; text-align: center; transition: all .2s; }
   .feedback.idle { background: rgba(110,118,129,.05); border: 1px dashed var(--border2); color: var(--text3); font-size: 0.85rem; }
   .feedback.success { background: rgba(63,185,80,.1); border: 1px solid rgba(63,185,80,.3); }
   .feedback.error { background: rgba(248,81,73,.1); border: 1px solid rgba(248,81,73,.3); }
@@ -63,16 +76,22 @@
   .spinner { width: 28px; height: 28px; border: 3px solid var(--border2); border-top-color: var(--blue); border-radius: 50%; animation: spin .75s linear infinite; margin: 0 auto 8px; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .history-panel { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 20px; height: fit-content; max-height: 600px; overflow-y: auto; }
-  .history-title { font-size: 0.78rem; color: var(--text2); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-  .history-empty { color: var(--text3); font-size: 0.8rem; text-align: center; padding: 20px 0; }
-  .history-item { padding: 10px 0; border-bottom: 1px solid rgba(33,38,45,.6); font-size: 0.78rem; }
-  .history-item:last-child { border-bottom: none; }
-  .hi-prod { color: var(--white); font-weight: 600; margin-bottom: 3px; line-height: 1.3; }
-  .hi-meta { color: var(--text3); font-size: 0.7rem; font-family: 'Cascadia Code','Consolas',monospace; }
-  .hi-meta .hi-qty { color: var(--orange); font-weight: 700; }
-  .hi-time { color: var(--text3); font-size: 0.68rem; margin-top: 3px; }
-  .hi-erro { color: var(--red); font-weight: 600; }
+  /* ── Lista de produtos do inbound ── */
+  .inbound-panel { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 20px; max-height: 70vh; overflow-y: auto; }
+  .ip-title { font-size: 0.78rem; color: var(--text2); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .produto-item { padding: 12px; border-radius: 8px; margin-bottom: 8px; background: var(--bg); border: 1px solid var(--border); transition: all .2s; }
+  .produto-item.completo { border-color: var(--green); background: rgba(63,185,80,.05); }
+  .produto-item.parcial { border-color: var(--yellow); background: rgba(210,153,34,.05); }
+  .pi-title { color: var(--white); font-weight: 600; font-size: 0.85rem; line-height: 1.3; margin-bottom: 6px; }
+  .pi-meta { color: var(--text3); font-size: 0.72rem; font-family: 'Cascadia Code','Consolas',monospace; line-height: 1.4; }
+  .pi-progress { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .pi-bar { flex: 1; height: 6px; background: var(--border2); border-radius: 3px; overflow: hidden; }
+  .pi-bar-fill { height: 100%; transition: width .3s; }
+  .pi-bar-fill.green { background: var(--green); }
+  .pi-bar-fill.yellow { background: var(--yellow); }
+  .pi-count { font-size: 0.78rem; font-weight: 700; color: var(--white); min-width: 70px; text-align: right; }
+  .pi-count .done { color: var(--green); }
+  .pi-count.over .done { color: var(--red); }
 
   /* área que renderiza a etiqueta para impressão (escondida na tela) */
   .print-area { position: fixed; left: -9999px; top: 0; width: 100mm; }
@@ -103,89 +122,190 @@
     <div class="logo-icon">B</div>
     <div>
       <h1>Bipar Etiquetas</h1>
-      <div class="sub">Bipa o EAN do produto e a etiqueta sai automaticamente</div>
+      <div class="sub" id="header-sub">Carregue o PDF de inbound para começar</div>
     </div>
   </div>
   <div class="header-right">
-    <span class="badge badge-cache" id="cache-badge"><span class="pulse"></span> Carregando…</span>
-    <button class="btn" onclick="recarregarCache()" title="Recarregar lista de itens fulfillment">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-      Recarregar
-    </button>
+    <span class="badge-inbound" id="badge-inbound" style="display:none"></span>
+    <button class="btn btn-danger" id="btn-fechar" onclick="fecharInbound()" style="display:none">Fechar inbound</button>
     <a class="btn" href="/" style="text-decoration:none">← Dashboard</a>
   </div>
 </header>
 
 <div class="container">
-  <div class="scan-area">
-    <div class="scan-label">Bipa o EAN aqui</div>
-    <input id="scan" class="scan-input" type="text" placeholder="Bipe ou digite o EAN e pressione Enter…" autocomplete="off" autofocus />
 
-    <div class="config-row">
-      <div class="config-item">
-        <label for="qty">Etiquetas por bipagem:</label>
-        <input id="qty" class="qty-input" type="number" min="1" max="500" value="1" />
-      </div>
-      <div class="config-item" style="color:var(--text3);font-size:0.78rem">
-        Atalhos: <kbd>Esc</kbd> limpar &nbsp; <kbd>F2</kbd> foco no campo
-      </div>
-    </div>
-
-    <div id="feedback" class="feedback idle">
-      <div class="fb-content">Aguardando bipagem…</div>
+  <!-- ESTADO 1: Upload do PDF -->
+  <div id="upload-section">
+    <div class="upload-area" id="drop-zone">
+      <div class="upload-icon">📄</div>
+      <div class="upload-title">Arraste o PDF do inbound</div>
+      <div class="upload-sub">Ou clique para selecionar o arquivo de instruções de preparação do ML</div>
+      <label class="btn btn-primary" for="file-input" style="cursor:pointer">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Selecionar PDF
+      </label>
+      <input type="file" id="file-input" class="upload-input" accept="application/pdf,.pdf" />
+      <div id="upload-status" style="margin-top:18px;font-size:0.85rem;color:var(--text3)"></div>
     </div>
   </div>
 
-  <div class="history-panel">
-    <div class="history-title">
-      <span>Histórico</span>
-      <button class="btn" onclick="limparHistorico()" style="font-size:0.7rem;padding:3px 8px">Limpar</button>
+  <!-- ESTADO 2: Bipagem -->
+  <div id="working-section" style="display:none">
+    <div class="grid">
+      <div class="scan-area">
+        <div class="scan-label">Bipa o EAN do produto</div>
+        <input id="scan" class="scan-input" type="text" placeholder="Bipe ou digite o EAN e pressione Enter…" autocomplete="off" />
+
+        <div class="config-row">
+          <div class="config-item">
+            <label for="qty">Etiquetas por bipagem:</label>
+            <input id="qty" class="qty-input" type="number" min="1" max="500" value="1" />
+          </div>
+          <div class="config-item" style="color:var(--text3);font-size:0.78rem">
+            Atalhos: <kbd>Esc</kbd> limpar &nbsp; <kbd>F2</kbd> foco no campo
+          </div>
+        </div>
+
+        <div id="feedback" class="feedback idle">
+          <div class="fb-content">Aguardando bipagem…</div>
+        </div>
+      </div>
+
+      <div class="inbound-panel">
+        <div class="ip-title">
+          <span>Produtos do inbound</span>
+          <span id="ip-summary" style="color:var(--text3);font-weight:400;font-size:0.7rem"></span>
+        </div>
+        <div id="produtos-list"></div>
+      </div>
     </div>
-    <div id="history"><div class="history-empty">Nenhuma bipagem ainda</div></div>
   </div>
+
 </div>
 
 <div class="print-area" id="print-area"></div>
 
 <script>
+  // ── Estado ──────────────────────────────────────────────────────────────
+  let inbound = null; // { inboundId, totalUnidades, produtos: [...] }
+  let bipados = {}; // ean -> contagem de etiquetas impressas
+
+  // ── Elementos ───────────────────────────────────────────────────────────
   const scanInput = document.getElementById('scan');
   const feedback = document.getElementById('feedback');
-  const historyEl = document.getElementById('history');
   const qtyInput = document.getElementById('qty');
-  const cacheBadge = document.getElementById('cache-badge');
   const printArea = document.getElementById('print-area');
+  const dropZone = document.getElementById('drop-zone');
+  const fileInput = document.getElementById('file-input');
+  const uploadStatus = document.getElementById('upload-status');
+  const headerSub = document.getElementById('header-sub');
+  const badgeInbound = document.getElementById('badge-inbound');
+  const btnFechar = document.getElementById('btn-fechar');
+  const uploadSection = document.getElementById('upload-section');
+  const workingSection = document.getElementById('working-section');
+  const produtosList = document.getElementById('produtos-list');
+  const ipSummary = document.getElementById('ip-summary');
 
-  let history = JSON.parse(localStorage.getItem('bipar_history') || '[]');
-  renderHistory();
+  // Tenta restaurar do localStorage
+  try {
+    const saved = JSON.parse(localStorage.getItem('inbound_atual') || 'null');
+    if (saved && saved.produtos) {
+      inbound = saved;
+      bipados = JSON.parse(localStorage.getItem('inbound_bipados') || '{}');
+      mostrarTrabalho();
+    }
+  } catch {}
 
-  // ── Cache status ─────────────────────────────────────────────────────────
-  async function atualizarCacheStatus() {
+  // ── Upload do PDF ───────────────────────────────────────────────────────
+  ['dragenter','dragover'].forEach(ev => {
+    dropZone.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); dropZone.classList.add('drag'); });
+  });
+  ['dragleave','drop'].forEach(ev => {
+    dropZone.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); dropZone.classList.remove('drag'); });
+  });
+  dropZone.addEventListener('drop', e => {
+    const file = e.dataTransfer.files[0];
+    if (file) processarArquivo(file);
+  });
+  fileInput.addEventListener('change', e => {
+    if (e.target.files[0]) processarArquivo(e.target.files[0]);
+  });
+
+  async function processarArquivo(file) {
+    if (!/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') {
+      uploadStatus.textContent = '✗ Só arquivos PDF';
+      uploadStatus.style.color = 'var(--red)';
+      return;
+    }
+    uploadStatus.innerHTML = '<div class="spinner"></div>Processando PDF…';
+    uploadStatus.style.color = 'var(--blue)';
+
+    const fd = new FormData();
+    fd.append('pdf', file);
     try {
-      const r = await fetch('/api/scan-cache/status');
+      const r = await fetch('/api/inbound-parse', { method: 'POST', body: fd });
       const d = await r.json();
-      if (d.loading) {
-        cacheBadge.className = 'badge badge-cache loading';
-        cacheBadge.innerHTML = '<span class="pulse"></span> Carregando cache…';
-      } else if (d.total === 0) {
-        cacheBadge.className = 'badge badge-cache loading';
-        cacheBadge.innerHTML = 'Cache vazio';
-      } else {
-        const horario = d.loadedAt ? new Date(d.loadedAt).toLocaleTimeString('pt-BR') : '';
-        cacheBadge.className = 'badge badge-cache';
-        cacheBadge.innerHTML = `<span class="pulse"></span> ${d.total} EANs · ${horario}`;
-      }
+      if (!r.ok) throw new Error(d.error || 'Erro');
+
+      inbound = d;
+      bipados = {};
+      localStorage.setItem('inbound_atual', JSON.stringify(inbound));
+      localStorage.setItem('inbound_bipados', '{}');
+      mostrarTrabalho();
     } catch (e) {
-      cacheBadge.innerHTML = 'Erro';
+      uploadStatus.textContent = '✗ ' + e.message;
+      uploadStatus.style.color = 'var(--red)';
     }
   }
-  setInterval(atualizarCacheStatus, 5000);
-  atualizarCacheStatus();
 
-  async function recarregarCache() {
-    cacheBadge.className = 'badge badge-cache loading';
-    cacheBadge.innerHTML = '<span class="pulse"></span> Recarregando…';
-    await fetch('/api/scan-cache/refresh', { method: 'POST' });
-    setTimeout(atualizarCacheStatus, 1000);
+  function mostrarTrabalho() {
+    uploadSection.style.display = 'none';
+    workingSection.style.display = 'block';
+    headerSub.textContent = 'Bipa o EAN do produto e a etiqueta sai automaticamente';
+    badgeInbound.style.display = 'inline-block';
+    badgeInbound.textContent = `Inbound #${inbound.inboundId} · ${inbound.produtos.length} produto${inbound.produtos.length>1?'s':''} · ${inbound.totalUnidades} un`;
+    btnFechar.style.display = 'inline-flex';
+    renderProdutos();
+    setTimeout(() => scanInput.focus(), 100);
+  }
+
+  function fecharInbound() {
+    if (!confirm('Fechar este inbound? O progresso de bipagem será perdido.')) return;
+    inbound = null;
+    bipados = {};
+    localStorage.removeItem('inbound_atual');
+    localStorage.removeItem('inbound_bipados');
+    uploadSection.style.display = 'block';
+    workingSection.style.display = 'none';
+    headerSub.textContent = 'Carregue o PDF de inbound para começar';
+    badgeInbound.style.display = 'none';
+    btnFechar.style.display = 'none';
+    uploadStatus.textContent = '';
+    fileInput.value = '';
+  }
+
+  // ── Renderiza lista de produtos com progresso ───────────────────────────
+  function renderProdutos() {
+    if (!inbound) return;
+    const totalBipado = Object.values(bipados).reduce((a, b) => a + b, 0);
+    ipSummary.textContent = `${totalBipado}/${inbound.totalUnidades} bipados`;
+
+    produtosList.innerHTML = inbound.produtos.map(p => {
+      const done = bipados[p.ean] || 0;
+      const total = p.unidades || 0;
+      const pct = total > 0 ? Math.min(100, (done / total) * 100) : 0;
+      const completo = total > 0 && done >= total;
+      const parcial = done > 0 && !completo;
+      const over = total > 0 && done > total;
+      return `<div class="produto-item ${completo?'completo':parcial?'parcial':''}">
+        <div class="pi-title">${escapeHtml(p.title)}</div>
+        <div class="pi-meta">EAN: ${escapeHtml(p.ean)} · SKU: ${escapeHtml(p.sku || '—')} · ${escapeHtml(p.inventoryId)}</div>
+        <div class="pi-progress">
+          <div class="pi-bar"><div class="pi-bar-fill ${completo?'green':'yellow'}" style="width:${pct.toFixed(1)}%"></div></div>
+          <div class="pi-count ${over?'over':''}"><span class="done">${done}</span>/${total}</div>
+        </div>
+      </div>`;
+    }).join('');
   }
 
   // ── Bipagem ──────────────────────────────────────────────────────────────
@@ -212,47 +332,46 @@
 
   async function processarEAN(ean) {
     scanInput.className = 'scan-input';
-    mostrarFeedback('loading', '<div class="spinner"></div>Buscando produto…');
 
-    try {
-      const r = await fetch('/api/scan-product?ean=' + encodeURIComponent(ean));
-      const data = await r.json();
-
-      if (!r.ok) {
-        scanInput.className = 'scan-input error';
-        mostrarFeedback('error', `<div class="fb-icon">❌</div><div class="fb-title fb-error">${data.error || 'Erro'}</div><div class="fb-sub">EAN: ${ean}</div>`);
-        adicionarHistorico({ ean, erro: data.error || 'Erro', timestamp: Date.now() });
-        beep('error');
-        return;
-      }
-
-      const produto = data.produto;
-      const qtd = Math.max(1, parseInt(qtyInput.value) || 1);
-
-      // Renderiza etiquetas e imprime
-      gerarEtiquetas(produto, qtd);
-      window.print();
-
-      scanInput.className = 'scan-input success';
-      mostrarFeedback('success',
-        `<div class="fb-content">
-          <div class="fb-icon">✓</div>
-          <div class="fb-title">${produto.title}</div>
-          <div class="fb-sub">${qtd} etiqueta${qtd>1?'s':''} impressa${qtd>1?'s':''} · ${produto.inventoryId} · SKU ${produto.sku || '—'}</div>
-        </div>`
-      );
-      adicionarHistorico({ ean, ...produto, qtd, timestamp: Date.now() });
-      beep('success');
-    } catch (e) {
+    // Procura no inbound atual
+    const produto = inbound.produtos.find(p => p.ean === ean);
+    if (!produto) {
       scanInput.className = 'scan-input error';
-      mostrarFeedback('error', `<div class="fb-icon">⚠️</div><div class="fb-title fb-error">Erro de conexão</div><div class="fb-sub">${e.message}</div>`);
+      mostrarFeedback('error', `<div class="fb-icon">❌</div><div class="fb-title fb-error">EAN não está neste inbound</div><div class="fb-sub">EAN bipado: ${ean}</div>`);
       beep('error');
-    } finally {
-      setTimeout(() => {
-        scanInput.value = '';
-        scanInput.focus();
-      }, 600);
+      setTimeout(() => { scanInput.value = ''; scanInput.focus(); }, 800);
+      return;
     }
+
+    const qtd = Math.max(1, parseInt(qtyInput.value) || 1);
+
+    // Renderiza etiquetas e imprime
+    gerarEtiquetas(produto, qtd);
+    window.print();
+
+    // Atualiza contador
+    bipados[ean] = (bipados[ean] || 0) + qtd;
+    localStorage.setItem('inbound_bipados', JSON.stringify(bipados));
+    renderProdutos();
+
+    const done = bipados[ean];
+    const total = produto.unidades || 0;
+    const restante = Math.max(0, total - done);
+
+    scanInput.className = 'scan-input success';
+    mostrarFeedback('success',
+      `<div class="fb-content">
+        <div class="fb-icon">${done >= total ? '🎉' : '✓'}</div>
+        <div class="fb-title">${escapeHtml(produto.title)}</div>
+        <div class="fb-sub">${qtd} etiqueta${qtd>1?'s':''} impressa${qtd>1?'s':''} · ${done}/${total} bipados${restante>0 ? ` · faltam ${restante}` : ' · COMPLETO!'}</div>
+      </div>`
+    );
+    beep('success');
+
+    setTimeout(() => {
+      scanInput.value = '';
+      scanInput.focus();
+    }, 600);
   }
 
   function mostrarFeedback(tipo, html) {
@@ -273,21 +392,10 @@
         </div>`;
     }
     printArea.innerHTML = html;
-
-    // Renderiza barcodes Code 128 com o inventoryId
     printArea.querySelectorAll('svg').forEach(svg => {
       try {
-        JsBarcode(svg, produto.inventoryId, {
-          format: 'CODE128',
-          width: 2,
-          height: 50,
-          displayValue: true,
-          fontSize: 14,
-          margin: 0,
-        });
-      } catch (e) {
-        console.error('Erro JsBarcode:', e);
-      }
+        JsBarcode(svg, produto.inventoryId, { format: 'CODE128', width: 2, height: 50, displayValue: true, fontSize: 14, margin: 0 });
+      } catch (e) { console.error('Erro JsBarcode:', e); }
     });
   }
 
@@ -295,44 +403,7 @@
     return String(s || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   }
 
-  // ── Histórico ────────────────────────────────────────────────────────────
-  function adicionarHistorico(item) {
-    history.unshift(item);
-    if (history.length > 50) history = history.slice(0, 50);
-    localStorage.setItem('bipar_history', JSON.stringify(history));
-    renderHistory();
-  }
-
-  function limparHistorico() {
-    if (!confirm('Limpar histórico de bipagens?')) return;
-    history = [];
-    localStorage.setItem('bipar_history', '[]');
-    renderHistory();
-  }
-
-  function renderHistory() {
-    if (history.length === 0) {
-      historyEl.innerHTML = '<div class="history-empty">Nenhuma bipagem ainda</div>';
-      return;
-    }
-    historyEl.innerHTML = history.map(h => {
-      const time = new Date(h.timestamp).toLocaleTimeString('pt-BR');
-      if (h.erro) {
-        return `<div class="history-item">
-          <div class="hi-erro">❌ ${escapeHtml(h.erro)}</div>
-          <div class="hi-meta">EAN ${escapeHtml(h.ean)}</div>
-          <div class="hi-time">${time}</div>
-        </div>`;
-      }
-      return `<div class="history-item">
-        <div class="hi-prod">${escapeHtml(h.title || '?')}</div>
-        <div class="hi-meta"><span class="hi-qty">${h.qtd}×</span> · ${escapeHtml(h.inventoryId || '')} · SKU ${escapeHtml(h.sku || '—')}</div>
-        <div class="hi-time">${time}</div>
-      </div>`;
-    }).join('');
-  }
-
-  // ── Bip sonoro (opcional) ────────────────────────────────────────────────
+  // ── Bip sonoro ──────────────────────────────────────────────────────────
   function beep(tipo) {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -346,9 +417,10 @@
     } catch {}
   }
 
-  // Foco automático (caso clique fora)
+  // Foco automático
   document.addEventListener('click', (e) => {
-    if (!e.target.closest('button') && !e.target.closest('input') && !e.target.closest('a')) {
+    if (workingSection.style.display === 'none') return;
+    if (!e.target.closest('button') && !e.target.closest('input') && !e.target.closest('a') && !e.target.closest('label')) {
       scanInput.focus();
     }
   });

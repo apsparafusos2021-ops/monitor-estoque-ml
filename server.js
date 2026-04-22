@@ -16,6 +16,10 @@ if (envPath) {
 const express = require('express');
 const fetch = require('node-fetch');
 const { XMLParser } = require('fast-xml-parser');
+const multer = require('multer');
+const { PDFParse } = require('pdf-parse');
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -539,107 +543,91 @@ app.post('/api/tiny-stock', async (req, res) => {
   }
 });
 
-// ── Endpoint para bipagem de produtos ────────────────────────────────────────
-// Cache: EAN → { inventoryId, mlbId, title, sku }
-let scanCache = {};
-let scanCacheLoadedAt = null;
-let scanCacheLoading = false;
+// ── Parse de PDF de inbound do ML ────────────────────────────────────────────
+function parseInboundText(text) {
+  const inboundIdMatch = text.match(/Frete\s*#?\s*(\d+)/i);
+  const totalUnidadesMatch = text.match(/Total\s+de\s+unidades:\s*(\d+)/i);
+  const inboundId = inboundIdMatch ? inboundIdMatch[1] : null;
+  const totalUnidades = totalUnidadesMatch ? parseInt(totalUnidadesMatch[1]) : 0;
 
-async function loadScanCache() {
-  if (scanCacheLoading) return;
-  scanCacheLoading = true;
-  console.log('[SCAN] Carregando cache de itens fulfillment...');
-  try {
-    const token = await getToken();
-    if (!token) throw new Error('Sem token ML');
-
-    let allIds = [], scrollId = null;
-    while (true) {
-      const url = scrollId
-        ? `${BASE}/users/${CONFIG.sellerId}/items/search?search_type=scan&scroll_id=${scrollId}&limit=100&logistic_type=fulfillment`
-        : `${BASE}/users/${CONFIG.sellerId}/items/search?search_type=scan&limit=100&status=active&logistic_type=fulfillment`;
-      const r = await fetchComRetry(url, { headers: { Authorization: `Bearer ${token}` } });
-      if (!r) break;
-      const d = await r.json();
-      if (!d.results || d.results.length === 0) break;
-      allIds = allIds.concat(d.results);
-      scrollId = d.scroll_id;
-      if (allIds.length >= (d.paging?.total || 0)) break;
-      await sleep(200);
-    }
-    console.log(`[SCAN] ${allIds.length} itens fulfillment encontrados`);
-
-    const novoCache = {};
-    for (let i = 0; i < allIds.length; i += 20) {
-      const lote = allIds.slice(i, i + 20);
-      const r = await fetchComRetry(
-        `${BASE}/items?ids=${lote.join(',')}&attributes=id,title,inventory_id,seller_custom_field,attributes`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (!r) continue;
-      const d = await r.json();
-      for (const entry of d) {
-        if (entry.code !== 200 || !entry.body) continue;
-        const item = entry.body;
-        if (!item.inventory_id) continue;
-        const gtins = (item.attributes || [])
-          .filter(a => a.id === 'GTIN' || a.id === 'EAN')
-          .map(a => String(a.value_name || '').trim())
-          .filter(Boolean);
-        for (const ean of gtins) {
-          if (!novoCache[ean]) {
-            novoCache[ean] = {
-              inventoryId: item.inventory_id,
-              mlbId: item.id,
-              title: item.title || '',
-              sku: item.seller_custom_field || '',
-              ean,
-            };
-          }
-        }
-      }
-      await sleep(200);
-    }
-    scanCache = novoCache;
-    scanCacheLoadedAt = new Date().toISOString();
-    console.log(`[SCAN] Cache carregado: ${Object.keys(scanCache).length} EANs mapeados`);
-  } catch (e) {
-    console.error('[SCAN] Erro ao carregar cache:', e.message);
-  } finally {
-    scanCacheLoading = false;
+  // Cada produto tem o padrão: Código ML: XXX Código universal: EAN SKU: YYY
+  // depois vem o nome do produto
+  // depois (linhas adiante): número de unidades
+  const produtos = [];
+  const codigoRegex = /Código\s+ML:\s*([A-Z0-9]+)\s+Código\s+universal:\s*(\d+)\s+SKU:\s*([^\s\n]+)/gi;
+  let match;
+  const matches = [];
+  while ((match = codigoRegex.exec(text)) !== null) {
+    matches.push({
+      idx: match.index,
+      end: match.index + match[0].length,
+      inventoryId: match[1].trim(),
+      ean: match[2].trim(),
+      sku: match[3].trim(),
+    });
   }
+
+  // Para cada produto encontrado, busca o nome (linhas após o match)
+  // e a quantidade (procura por número antes do próximo produto ou no final)
+  for (let i = 0; i < matches.length; i++) {
+    const m = matches[i];
+    const nextStart = i + 1 < matches.length ? matches[i + 1].idx : text.length;
+    const bloco = text.substring(m.end, nextStart);
+
+    // Nome: pega as linhas após o match até encontrar "Etiquetagem" ou tabela
+    const linhas = bloco.split('\n').map(s => s.trim()).filter(Boolean);
+    const titleLines = [];
+    for (const linha of linhas) {
+      if (/Etiquetagem|PRODUTO\s+UNIDADES|IDENTIFI|INSTRU/i.test(linha)) break;
+      titleLines.push(linha);
+      if (titleLines.length >= 4) break;
+    }
+    const title = titleLines.join(' ').trim();
+
+    // Quantidade: procura o número que aparece após "PRODUTO UNIDADES IDENTIFIÇÃO" do bloco
+    let unidades = 0;
+    const qtyMatch = bloco.match(/INSTRU[ÇC][ÕO]ES[^\n]*\n\s*(\d+)/i)
+                  || bloco.match(/UNIDADES[^\n]*\n[\s\S]*?\n\s*(\d+)/i)
+                  || bloco.match(/\n\s*(\d{1,5})\s*$/);
+    if (qtyMatch) unidades = parseInt(qtyMatch[1]);
+
+    produtos.push({
+      inventoryId: m.inventoryId,
+      ean: m.ean,
+      sku: m.sku,
+      title,
+      unidades,
+    });
+  }
+
+  return { inboundId, totalUnidades, produtos };
 }
 
-// Recarrega o cache a cada 1 hora
-setInterval(loadScanCache, 60 * 60 * 1000);
-// Carrega na inicialização (após 5s para o servidor subir)
-setTimeout(loadScanCache, 5000);
+app.post('/api/inbound-parse', upload.single('pdf'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'PDF não enviado' });
+    console.log(`[INBOUND] Recebido PDF de ${req.file.size} bytes`);
 
-app.get('/api/scan-cache/status', (req, res) => {
-  res.json({
-    total: Object.keys(scanCache).length,
-    loadedAt: scanCacheLoadedAt,
-    loading: scanCacheLoading,
-  });
-});
+    const parser = new PDFParse({ data: req.file.buffer });
+    const result = await parser.getText();
+    const text = result.text || '';
 
-app.post('/api/scan-cache/refresh', async (req, res) => {
-  if (scanCacheLoading) return res.json({ ok: true, message: 'Já está carregando' });
-  loadScanCache();
-  res.json({ ok: true, message: 'Recarga iniciada' });
-});
+    const parsed = parseInboundText(text);
+    console.log(`[INBOUND] #${parsed.inboundId}: ${parsed.produtos.length} produtos, ${parsed.totalUnidades} unidades`);
 
-app.get('/api/scan-product', (req, res) => {
-  const ean = String(req.query.ean || '').trim();
-  if (!ean) return res.status(400).json({ error: 'EAN não fornecido' });
-  if (Object.keys(scanCache).length === 0) {
-    return res.status(503).json({ error: 'Cache ainda não carregado, aguarde alguns segundos e tente novamente' });
+    if (parsed.produtos.length === 0) {
+      return res.status(400).json({ error: 'Nenhum produto encontrado no PDF. Verifique se é um PDF de instruções de inbound do ML.' });
+    }
+
+    res.json({
+      inboundId: parsed.inboundId,
+      totalUnidades: parsed.totalUnidades,
+      produtos: parsed.produtos,
+    });
+  } catch (e) {
+    console.error('[INBOUND] Erro:', e.message);
+    res.status(500).json({ error: e.message });
   }
-  const produto = scanCache[ean];
-  if (!produto) {
-    return res.status(404).json({ error: `EAN ${ean} não encontrado entre os itens fulfillment` });
-  }
-  res.json({ produto });
 });
 
 app.listen(PORT, () => {
