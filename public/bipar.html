@@ -94,22 +94,27 @@
   .pi-count.over .done { color: var(--red); }
 
   /* área que renderiza a etiqueta para impressão (escondida na tela) */
-  .print-area { position: fixed; left: -9999px; top: 0; width: 100mm; }
-  .label {
-    width: 100mm; height: 50mm; padding: 3mm; box-sizing: border-box;
+  /* Etiqueta: 40mm x 25mm, papel com 2 colunas (cada linha = 2 etiquetas lado a lado) */
+  .print-area { position: fixed; left: -9999px; top: 0; width: 80mm; }
+  .label-row {
+    width: 80mm; height: 25mm; box-sizing: border-box;
     background: white; color: black; font-family: Arial, sans-serif;
-    page-break-after: always; display: flex; flex-direction: column;
+    page-break-after: always; display: flex; gap: 0;
   }
-  .label svg { display: block; width: 100%; height: 18mm; }
-  .label-title { font-size: 9pt; font-weight: 700; line-height: 1.15; max-height: 22mm; overflow: hidden; margin-top: 1mm; }
-  .label-sku { font-size: 8pt; margin-top: auto; }
+  .label-cell {
+    width: 40mm; height: 25mm; padding: 1.5mm; box-sizing: border-box;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .label-cell svg { display: block; width: 100%; height: 9mm; }
+  .label-title { font-size: 6pt; font-weight: 700; line-height: 1.05; max-height: 11mm; overflow: hidden; margin-top: 0.5mm; }
+  .label-sku { font-size: 6pt; margin-top: auto; }
 
   @media print {
     body * { visibility: hidden; }
     .print-area, .print-area * { visibility: visible; }
     .print-area { position: static !important; left: 0 !important; }
-    .label { page-break-after: always; }
-    @page { size: 100mm 50mm; margin: 0; }
+    .label-row { page-break-after: always; }
+    @page { size: 80mm 25mm; margin: 0; }
   }
 
   kbd { background: var(--border2); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; color: var(--white); font-family: 'Cascadia Code',monospace; }
@@ -158,7 +163,7 @@
 
         <div class="config-row">
           <div class="config-item">
-            <label for="qty">Etiquetas por bipagem:</label>
+            <label for="qty">Linhas por bipagem (1 linha = 2 etiquetas):</label>
             <input id="qty" class="qty-input" type="number" min="1" max="500" value="1" />
           </div>
           <div class="config-item" style="color:var(--text3);font-size:0.78rem">
@@ -343,14 +348,15 @@
       return;
     }
 
-    const qtd = Math.max(1, parseInt(qtyInput.value) || 1);
+    const linhas = Math.max(1, parseInt(qtyInput.value) || 1);
+    const etiquetas = linhas * 2;
 
     // Renderiza etiquetas e imprime
-    gerarEtiquetas(produto, qtd);
+    gerarEtiquetas(produto, linhas);
     window.print();
 
-    // Atualiza contador
-    bipados[ean] = (bipados[ean] || 0) + qtd;
+    // Atualiza contador (etiquetas individuais)
+    bipados[ean] = (bipados[ean] || 0) + etiquetas;
     localStorage.setItem('inbound_bipados', JSON.stringify(bipados));
     renderProdutos();
 
@@ -363,7 +369,7 @@
       `<div class="fb-content">
         <div class="fb-icon">${done >= total ? '🎉' : '✓'}</div>
         <div class="fb-title">${escapeHtml(produto.title)}</div>
-        <div class="fb-sub">${qtd} etiqueta${qtd>1?'s':''} impressa${qtd>1?'s':''} · ${done}/${total} bipados${restante>0 ? ` · faltam ${restante}` : ' · COMPLETO!'}</div>
+        <div class="fb-sub">${linhas} linha${linhas>1?'s':''} (${etiquetas} etiquetas) · ${done}/${total} bipados${restante>0 ? ` · faltam ${restante}` : ' · COMPLETO!'}</div>
       </div>`
     );
     beep('success');
@@ -380,21 +386,24 @@
   }
 
   // ── Geração das etiquetas ────────────────────────────────────────────────
+  // qtd = quantidade de LINHAS (cada linha imprime 2 etiquetas lado a lado)
   function gerarEtiquetas(produto, qtd) {
     let html = '';
     for (let i = 0; i < qtd; i++) {
-      const svgId = 'bc_' + Date.now() + '_' + i;
-      html += `
-        <div class="label">
-          <svg id="${svgId}"></svg>
+      const svg1 = 'bc_' + Date.now() + '_' + i + '_a';
+      const svg2 = 'bc_' + Date.now() + '_' + i + '_b';
+      const cell = (id) => `
+        <div class="label-cell">
+          <svg id="${id}"></svg>
           <div class="label-title">${escapeHtml(produto.title)}</div>
           <div class="label-sku">SKU: ${escapeHtml(produto.sku || '—')}</div>
         </div>`;
+      html += `<div class="label-row">${cell(svg1)}${cell(svg2)}</div>`;
     }
     printArea.innerHTML = html;
     printArea.querySelectorAll('svg').forEach(svg => {
       try {
-        JsBarcode(svg, produto.inventoryId, { format: 'CODE128', width: 2, height: 50, displayValue: true, fontSize: 14, margin: 0 });
+        JsBarcode(svg, produto.inventoryId, { format: 'CODE128', width: 1.4, height: 30, displayValue: true, fontSize: 10, margin: 0 });
       } catch (e) { console.error('Erro JsBarcode:', e); }
     });
   }
