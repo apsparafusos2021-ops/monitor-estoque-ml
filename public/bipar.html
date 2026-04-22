@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bipar Etiquetas — Monitor ML</title>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0d1117; --bg2: #161b22; --border: #21262d; --border2: #30363d;
+    --text: #c9d1d9; --text2: #8b949e; --text3: #6e7681; --white: #f0f6fc;
+    --blue: #58a6ff; --orange: #f0883e; --green: #3fb950; --red: #f85149; --yellow: #d29922;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+  header { padding: 14px 28px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #f0883e, #58a6ff); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: 700; color: #fff; }
+  h1 { font-size: 1rem; font-weight: 600; color: var(--white); }
+  .sub { font-size: 0.72rem; color: var(--text3); margin-top: 1px; }
+  .header-right { display: flex; align-items: center; gap: 8px; }
+  .btn { background: var(--bg2); border: 1px solid var(--border2); color: var(--text); padding: 6px 14px; border-radius: 7px; cursor: pointer; font-size: 0.78rem; transition: background .15s, border-color .15s; display: flex; align-items: center; gap: 5px; }
+  .btn:hover { background: var(--border2); border-color: #484f58; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
+  .badge-cache { background: rgba(63,185,80,.1); color: var(--green); border: 1px solid rgba(63,185,80,.25); }
+  .badge-cache.loading { background: rgba(210,153,34,.1); color: var(--yellow); border-color: rgba(210,153,34,.25); }
+  .pulse { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 24px 28px; display: grid; grid-template-columns: 1fr 320px; gap: 24px; }
+  @media (max-width: 800px) { .container { grid-template-columns: 1fr; } }
+
+  .scan-area { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 32px; }
+  .scan-label { font-size: 0.72rem; color: var(--text2); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 8px; }
+  .scan-input {
+    width: 100%; background: var(--bg); border: 2px solid var(--border2);
+    color: var(--white); padding: 18px 22px; border-radius: 10px;
+    font-family: 'Cascadia Code','Consolas',monospace; font-size: 1.4rem; font-weight: 600;
+    outline: none; transition: border-color .15s; letter-spacing: 2px;
+  }
+  .scan-input:focus { border-color: var(--blue); box-shadow: 0 0 0 4px rgba(88,166,255,.15); }
+  .scan-input.success { border-color: var(--green); box-shadow: 0 0 0 4px rgba(63,185,80,.2); }
+  .scan-input.error { border-color: var(--red); box-shadow: 0 0 0 4px rgba(248,81,73,.2); }
+
+  .config-row { display: flex; gap: 16px; margin-top: 16px; align-items: center; flex-wrap: wrap; }
+  .config-item { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; }
+  .qty-input { width: 60px; background: var(--bg); border: 1px solid var(--border2); color: var(--white); padding: 6px 10px; border-radius: 7px; font-size: 0.95rem; text-align: center; outline: none; font-weight: 600; }
+  .qty-input:focus { border-color: var(--blue); }
+
+  .feedback { margin-top: 24px; padding: 20px; border-radius: 10px; min-height: 80px; display: flex; align-items: center; justify-content: center; text-align: center; transition: all .2s; }
+  .feedback.idle { background: rgba(110,118,129,.05); border: 1px dashed var(--border2); color: var(--text3); font-size: 0.85rem; }
+  .feedback.success { background: rgba(63,185,80,.1); border: 1px solid rgba(63,185,80,.3); }
+  .feedback.error { background: rgba(248,81,73,.1); border: 1px solid rgba(248,81,73,.3); }
+  .feedback.loading { background: rgba(88,166,255,.08); border: 1px solid rgba(88,166,255,.25); color: var(--blue); }
+  .fb-content { width: 100%; }
+  .fb-icon { font-size: 2rem; margin-bottom: 6px; }
+  .fb-title { font-size: 1.1rem; font-weight: 700; color: var(--white); margin-bottom: 4px; }
+  .fb-sub { font-size: 0.8rem; color: var(--text2); }
+  .fb-error { color: var(--red); font-weight: 600; }
+
+  .spinner { width: 28px; height: 28px; border: 3px solid var(--border2); border-top-color: var(--blue); border-radius: 50%; animation: spin .75s linear infinite; margin: 0 auto 8px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .history-panel { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 20px; height: fit-content; max-height: 600px; overflow-y: auto; }
+  .history-title { font-size: 0.78rem; color: var(--text2); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .history-empty { color: var(--text3); font-size: 0.8rem; text-align: center; padding: 20px 0; }
+  .history-item { padding: 10px 0; border-bottom: 1px solid rgba(33,38,45,.6); font-size: 0.78rem; }
+  .history-item:last-child { border-bottom: none; }
+  .hi-prod { color: var(--white); font-weight: 600; margin-bottom: 3px; line-height: 1.3; }
+  .hi-meta { color: var(--text3); font-size: 0.7rem; font-family: 'Cascadia Code','Consolas',monospace; }
+  .hi-meta .hi-qty { color: var(--orange); font-weight: 700; }
+  .hi-time { color: var(--text3); font-size: 0.68rem; margin-top: 3px; }
+  .hi-erro { color: var(--red); font-weight: 600; }
+
+  /* área que renderiza a etiqueta para impressão (escondida na tela) */
+  .print-area { position: fixed; left: -9999px; top: 0; width: 100mm; }
+  .label {
+    width: 100mm; height: 50mm; padding: 3mm; box-sizing: border-box;
+    background: white; color: black; font-family: Arial, sans-serif;
+    page-break-after: always; display: flex; flex-direction: column;
+  }
+  .label svg { display: block; width: 100%; height: 18mm; }
+  .label-title { font-size: 9pt; font-weight: 700; line-height: 1.15; max-height: 22mm; overflow: hidden; margin-top: 1mm; }
+  .label-sku { font-size: 8pt; margin-top: auto; }
+
+  @media print {
+    body * { visibility: hidden; }
+    .print-area, .print-area * { visibility: visible; }
+    .print-area { position: static !important; left: 0 !important; }
+    .label { page-break-after: always; }
+    @page { size: 100mm 50mm; margin: 0; }
+  }
+
+  kbd { background: var(--border2); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; color: var(--white); font-family: 'Cascadia Code',monospace; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <div class="logo-icon">B</div>
+    <div>
+      <h1>Bipar Etiquetas</h1>
+      <div class="sub">Bipa o EAN do produto e a etiqueta sai automaticamente</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <span class="badge badge-cache" id="cache-badge"><span class="pulse"></span> Carregando…</span>
+    <button class="btn" onclick="recarregarCache()" title="Recarregar lista de itens fulfillment">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+      Recarregar
+    </button>
+    <a class="btn" href="/" style="text-decoration:none">← Dashboard</a>
+  </div>
+</header>
+
+<div class="container">
+  <div class="scan-area">
+    <div class="scan-label">Bipa o EAN aqui</div>
+    <input id="scan" class="scan-input" type="text" placeholder="Bipe ou digite o EAN e pressione Enter…" autocomplete="off" autofocus />
+
+    <div class="config-row">
+      <div class="config-item">
+        <label for="qty">Etiquetas por bipagem:</label>
+        <input id="qty" class="qty-input" type="number" min="1" max="500" value="1" />
+      </div>
+      <div class="config-item" style="color:var(--text3);font-size:0.78rem">
+        Atalhos: <kbd>Esc</kbd> limpar &nbsp; <kbd>F2</kbd> foco no campo
+      </div>
+    </div>
+
+    <div id="feedback" class="feedback idle">
+      <div class="fb-content">Aguardando bipagem…</div>
+    </div>
+  </div>
+
+  <div class="history-panel">
+    <div class="history-title">
+      <span>Histórico</span>
+      <button class="btn" onclick="limparHistorico()" style="font-size:0.7rem;padding:3px 8px">Limpar</button>
+    </div>
+    <div id="history"><div class="history-empty">Nenhuma bipagem ainda</div></div>
+  </div>
+</div>
+
+<div class="print-area" id="print-area"></div>
+
+<script>
+  const scanInput = document.getElementById('scan');
+  const feedback = document.getElementById('feedback');
+  const historyEl = document.getElementById('history');
+  const qtyInput = document.getElementById('qty');
+  const cacheBadge = document.getElementById('cache-badge');
+  const printArea = document.getElementById('print-area');
+
+  let history = JSON.parse(localStorage.getItem('bipar_history') || '[]');
+  renderHistory();
+
+  // ── Cache status ─────────────────────────────────────────────────────────
+  async function atualizarCacheStatus() {
+    try {
+      const r = await fetch('/api/scan-cache/status');
+      const d = await r.json();
+      if (d.loading) {
+        cacheBadge.className = 'badge badge-cache loading';
+        cacheBadge.innerHTML = '<span class="pulse"></span> Carregando cache…';
+      } else if (d.total === 0) {
+        cacheBadge.className = 'badge badge-cache loading';
+        cacheBadge.innerHTML = 'Cache vazio';
+      } else {
+        const horario = d.loadedAt ? new Date(d.loadedAt).toLocaleTimeString('pt-BR') : '';
+        cacheBadge.className = 'badge badge-cache';
+        cacheBadge.innerHTML = `<span class="pulse"></span> ${d.total} EANs · ${horario}`;
+      }
+    } catch (e) {
+      cacheBadge.innerHTML = 'Erro';
+    }
+  }
+  setInterval(atualizarCacheStatus, 5000);
+  atualizarCacheStatus();
+
+  async function recarregarCache() {
+    cacheBadge.className = 'badge badge-cache loading';
+    cacheBadge.innerHTML = '<span class="pulse"></span> Recarregando…';
+    await fetch('/api/scan-cache/refresh', { method: 'POST' });
+    setTimeout(atualizarCacheStatus, 1000);
+  }
+
+  // ── Bipagem ──────────────────────────────────────────────────────────────
+  scanInput.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const ean = scanInput.value.trim();
+      if (!ean) return;
+      await processarEAN(ean);
+    } else if (e.key === 'Escape') {
+      scanInput.value = '';
+      scanInput.className = 'scan-input';
+      mostrarFeedback('idle', 'Aguardando bipagem…');
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'F2') {
+      e.preventDefault();
+      scanInput.focus();
+      scanInput.select();
+    }
+  });
+
+  async function processarEAN(ean) {
+    scanInput.className = 'scan-input';
+    mostrarFeedback('loading', '<div class="spinner"></div>Buscando produto…');
+
+    try {
+      const r = await fetch('/api/scan-product?ean=' + encodeURIComponent(ean));
+      const data = await r.json();
+
+      if (!r.ok) {
+        scanInput.className = 'scan-input error';
+        mostrarFeedback('error', `<div class="fb-icon">❌</div><div class="fb-title fb-error">${data.error || 'Erro'}</div><div class="fb-sub">EAN: ${ean}</div>`);
+        adicionarHistorico({ ean, erro: data.error || 'Erro', timestamp: Date.now() });
+        beep('error');
+        return;
+      }
+
+      const produto = data.produto;
+      const qtd = Math.max(1, parseInt(qtyInput.value) || 1);
+
+      // Renderiza etiquetas e imprime
+      gerarEtiquetas(produto, qtd);
+      window.print();
+
+      scanInput.className = 'scan-input success';
+      mostrarFeedback('success',
+        `<div class="fb-content">
+          <div class="fb-icon">✓</div>
+          <div class="fb-title">${produto.title}</div>
+          <div class="fb-sub">${qtd} etiqueta${qtd>1?'s':''} impressa${qtd>1?'s':''} · ${produto.inventoryId} · SKU ${produto.sku || '—'}</div>
+        </div>`
+      );
+      adicionarHistorico({ ean, ...produto, qtd, timestamp: Date.now() });
+      beep('success');
+    } catch (e) {
+      scanInput.className = 'scan-input error';
+      mostrarFeedback('error', `<div class="fb-icon">⚠️</div><div class="fb-title fb-error">Erro de conexão</div><div class="fb-sub">${e.message}</div>`);
+      beep('error');
+    } finally {
+      setTimeout(() => {
+        scanInput.value = '';
+        scanInput.focus();
+      }, 600);
+    }
+  }
+
+  function mostrarFeedback(tipo, html) {
+    feedback.className = 'feedback ' + tipo;
+    feedback.innerHTML = '<div class="fb-content">' + html + '</div>';
+  }
+
+  // ── Geração das etiquetas ────────────────────────────────────────────────
+  function gerarEtiquetas(produto, qtd) {
+    let html = '';
+    for (let i = 0; i < qtd; i++) {
+      const svgId = 'bc_' + Date.now() + '_' + i;
+      html += `
+        <div class="label">
+          <svg id="${svgId}"></svg>
+          <div class="label-title">${escapeHtml(produto.title)}</div>
+          <div class="label-sku">SKU: ${escapeHtml(produto.sku || '—')}</div>
+        </div>`;
+    }
+    printArea.innerHTML = html;
+
+    // Renderiza barcodes Code 128 com o inventoryId
+    printArea.querySelectorAll('svg').forEach(svg => {
+      try {
+        JsBarcode(svg, produto.inventoryId, {
+          format: 'CODE128',
+          width: 2,
+          height: 50,
+          displayValue: true,
+          fontSize: 14,
+          margin: 0,
+        });
+      } catch (e) {
+        console.error('Erro JsBarcode:', e);
+      }
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  // ── Histórico ────────────────────────────────────────────────────────────
+  function adicionarHistorico(item) {
+    history.unshift(item);
+    if (history.length > 50) history = history.slice(0, 50);
+    localStorage.setItem('bipar_history', JSON.stringify(history));
+    renderHistory();
+  }
+
+  function limparHistorico() {
+    if (!confirm('Limpar histórico de bipagens?')) return;
+    history = [];
+    localStorage.setItem('bipar_history', '[]');
+    renderHistory();
+  }
+
+  function renderHistory() {
+    if (history.length === 0) {
+      historyEl.innerHTML = '<div class="history-empty">Nenhuma bipagem ainda</div>';
+      return;
+    }
+    historyEl.innerHTML = history.map(h => {
+      const time = new Date(h.timestamp).toLocaleTimeString('pt-BR');
+      if (h.erro) {
+        return `<div class="history-item">
+          <div class="hi-erro">❌ ${escapeHtml(h.erro)}</div>
+          <div class="hi-meta">EAN ${escapeHtml(h.ean)}</div>
+          <div class="hi-time">${time}</div>
+        </div>`;
+      }
+      return `<div class="history-item">
+        <div class="hi-prod">${escapeHtml(h.title || '?')}</div>
+        <div class="hi-meta"><span class="hi-qty">${h.qtd}×</span> · ${escapeHtml(h.inventoryId || '')} · SKU ${escapeHtml(h.sku || '—')}</div>
+        <div class="hi-time">${time}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Bip sonoro (opcional) ────────────────────────────────────────────────
+  function beep(tipo) {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = tipo === 'success' ? 880 : 220;
+      gain.gain.value = 0.05;
+      osc.start();
+      setTimeout(() => { osc.stop(); ctx.close(); }, tipo === 'success' ? 100 : 250);
+    } catch {}
+  }
+
+  // Foco automático (caso clique fora)
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('button') && !e.target.closest('input') && !e.target.closest('a')) {
+      scanInput.focus();
+    }
+  });
+</script>
+</body>
+</html>

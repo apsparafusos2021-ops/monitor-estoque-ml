@@ -50,6 +50,11 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.text({ type: 'text/plain', limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Rota amigável para a página de bipagem (sem .html na URL)
+app.get('/bipar', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'bipar.html'));
+});
+
 // ── Config ML ──────────────────────────────────────────────────────────────────
 const CONFIG = {
   clientId:     process.env.ML_CLIENT_ID,
@@ -532,6 +537,109 @@ app.post('/api/tiny-stock', async (req, res) => {
     console.error('[TINY] Erro:', e.message);
     res.status(500).json({ error: e.message });
   }
+});
+
+// ── Endpoint para bipagem de produtos ────────────────────────────────────────
+// Cache: EAN → { inventoryId, mlbId, title, sku }
+let scanCache = {};
+let scanCacheLoadedAt = null;
+let scanCacheLoading = false;
+
+async function loadScanCache() {
+  if (scanCacheLoading) return;
+  scanCacheLoading = true;
+  console.log('[SCAN] Carregando cache de itens fulfillment...');
+  try {
+    const token = await getToken();
+    if (!token) throw new Error('Sem token ML');
+
+    let allIds = [], scrollId = null;
+    while (true) {
+      const url = scrollId
+        ? `${BASE}/users/${CONFIG.sellerId}/items/search?search_type=scan&scroll_id=${scrollId}&limit=100&logistic_type=fulfillment`
+        : `${BASE}/users/${CONFIG.sellerId}/items/search?search_type=scan&limit=100&status=active&logistic_type=fulfillment`;
+      const r = await fetchComRetry(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!r) break;
+      const d = await r.json();
+      if (!d.results || d.results.length === 0) break;
+      allIds = allIds.concat(d.results);
+      scrollId = d.scroll_id;
+      if (allIds.length >= (d.paging?.total || 0)) break;
+      await sleep(200);
+    }
+    console.log(`[SCAN] ${allIds.length} itens fulfillment encontrados`);
+
+    const novoCache = {};
+    for (let i = 0; i < allIds.length; i += 20) {
+      const lote = allIds.slice(i, i + 20);
+      const r = await fetchComRetry(
+        `${BASE}/items?ids=${lote.join(',')}&attributes=id,title,inventory_id,seller_custom_field,attributes`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!r) continue;
+      const d = await r.json();
+      for (const entry of d) {
+        if (entry.code !== 200 || !entry.body) continue;
+        const item = entry.body;
+        if (!item.inventory_id) continue;
+        const gtins = (item.attributes || [])
+          .filter(a => a.id === 'GTIN' || a.id === 'EAN')
+          .map(a => String(a.value_name || '').trim())
+          .filter(Boolean);
+        for (const ean of gtins) {
+          if (!novoCache[ean]) {
+            novoCache[ean] = {
+              inventoryId: item.inventory_id,
+              mlbId: item.id,
+              title: item.title || '',
+              sku: item.seller_custom_field || '',
+              ean,
+            };
+          }
+        }
+      }
+      await sleep(200);
+    }
+    scanCache = novoCache;
+    scanCacheLoadedAt = new Date().toISOString();
+    console.log(`[SCAN] Cache carregado: ${Object.keys(scanCache).length} EANs mapeados`);
+  } catch (e) {
+    console.error('[SCAN] Erro ao carregar cache:', e.message);
+  } finally {
+    scanCacheLoading = false;
+  }
+}
+
+// Recarrega o cache a cada 1 hora
+setInterval(loadScanCache, 60 * 60 * 1000);
+// Carrega na inicialização (após 5s para o servidor subir)
+setTimeout(loadScanCache, 5000);
+
+app.get('/api/scan-cache/status', (req, res) => {
+  res.json({
+    total: Object.keys(scanCache).length,
+    loadedAt: scanCacheLoadedAt,
+    loading: scanCacheLoading,
+  });
+});
+
+app.post('/api/scan-cache/refresh', async (req, res) => {
+  if (scanCacheLoading) return res.json({ ok: true, message: 'Já está carregando' });
+  loadScanCache();
+  res.json({ ok: true, message: 'Recarga iniciada' });
+});
+
+app.get('/api/scan-product', (req, res) => {
+  const ean = String(req.query.ean || '').trim();
+  if (!ean) return res.status(400).json({ error: 'EAN não fornecido' });
+  if (Object.keys(scanCache).length === 0) {
+    return res.status(503).json({ error: 'Cache ainda não carregado, aguarde alguns segundos e tente novamente' });
+  }
+  const produto = scanCache[ean];
+  if (!produto) {
+    return res.status(404).json({ error: `EAN ${ean} não encontrado entre os itens fulfillment` });
+  }
+  res.json({ produto });
 });
 
 app.listen(PORT, () => {
