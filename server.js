@@ -681,8 +681,8 @@ app.post('/api/generate-zpl', (req, res) => {
     const n = Math.max(1, Math.min(500, parseInt(linhas) || 1));
     let zpl = '';
     for (let i = 0; i < n; i++) zpl += gerarBlocoZpl(inventoryId, title || '', sku || '');
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="Etiquetas-${inventoryId}.txt"`);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="Etiquetas-${inventoryId}.zpl"`);
     res.send(zpl);
   } catch (e) {
     console.error('[ZPL] Erro:', e.message);
