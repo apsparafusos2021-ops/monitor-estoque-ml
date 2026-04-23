@@ -7,3 +7,8 @@ startCommand = "node monitor_coleta.js"
 name = "monitor-estoque"
 cronSchedule = "30 12 * * *"
 startCommand = "node monitor.js"
+
+[[services]]
+name = "monitor-sem-full"
+cronSchedule = "0 14 * * *"
+startCommand = "node monitor_sem_full.js"
