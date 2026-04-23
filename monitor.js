@@ -1,5 +1,7 @@
 require('dotenv').config();
 const fetch = require('node-fetch');
+const fs    = require('fs');
+const path  = require('path');
 
 const CONFIG = {
   clientId:       process.env.ML_CLIENT_ID,
@@ -85,11 +87,7 @@ async function getEstoqueInventario(inventoryId, token) {
     const entradaPendente = (d.not_available_detail || [])
       .filter(x => x.status === 'internalProcess')
       .reduce((s, x) => s + (x.quantity || 0), 0);
-    return {
-      available: d.available_quantity ?? 0,
-      aCaminho,
-      entradaPendente,
-    };
+    return { available: d.available_quantity ?? 0, aCaminho, entradaPendente };
   } catch (e) { return { available: 0, aCaminho: 0, entradaPendente: 0 }; }
 }
 async function getSales30d(itemId, token) {
@@ -126,6 +124,7 @@ function agruparPorInventario(todosItens) {
         available: item.available_quantity ?? 0,
         title: item.title,
         sku: item.seller_custom_field || 'N/A',
+        mlb: item.id,
         ids: new Set(),
       };
     }
@@ -145,7 +144,7 @@ function agruparPorInventario(todosItens) {
 async function sendTelegram(alerts) {
   if (!alerts.length) { console.log('Estoque OK — nenhum alerta.'); return; }
   const lines = alerts.map(a =>
-    `• ${a.title}\n  SKU: ${a.sku} | Disponivel: ${a.available} un | A caminho: ${a.aCaminho} un | Entrada pendente: ${a.entradaPendente} un | Vendas 30d: ${a.sales30d} un | ${a.pct}% | ~${a.daysLeft} dias`
+    `• ${a.title}\n  SKU: ${a.sku} | MLB: ${a.mlb} | Disponivel: ${a.available} un | A caminho: ${a.aCaminho} un | Entrada pendente: ${a.entradaPendente} un | Vendas 30d: ${a.sales30d} un | ${a.pct}% | ~${a.daysLeft} dias`
   ).join('\n\n');
   const text = `Alerta Fulfillment ML\n${alerts.length} produto(s) abaixo de ${CONFIG.alertThreshold * 100}%\n\n${lines}`;
   const chunks = [];
@@ -172,6 +171,18 @@ async function sendGoogleSheets(alerts) {
     if (r) console.log('Dados enviados para o Google Sheets!');
   } catch (e) {
     console.log('Erro ao enviar para Google Sheets:', e.message);
+  }
+}
+
+function saveData(alerts) {
+  try {
+    const dataDir = path.join(__dirname, 'data');
+    fs.mkdirSync(dataDir, { recursive: true });
+    const payload = { alerts, savedAt: new Date().toISOString() };
+    fs.writeFileSync(path.join(dataDir, 'estoque.json'), JSON.stringify(payload));
+    console.log('Dados salvos em data/estoque.json');
+  } catch (e) {
+    console.log('Erro ao salvar dados locais:', e.message);
   }
 }
 
@@ -205,16 +216,28 @@ async function sendGoogleSheets(alerts) {
     const entradaPendente = estoque.entradaPendente;
     const pct = (available / sales30d) * 100;
     const daysLeft = Math.round(available / (sales30d / 30));
-    console.log(`${grupo.title}: SKU=${grupo.sku} disponivel=${available} aCaminho=${aCaminho} entradaPendente=${entradaPendente} vendas30d=${sales30d} pct=${pct.toFixed(1)}%`);
+    console.log(`${grupo.title}: SKU=${grupo.sku} MLB=${grupo.mlb} disponivel=${available} aCaminho=${aCaminho} entradaPendente=${entradaPendente} vendas30d=${sales30d} pct=${pct.toFixed(1)}%`);
     if (pct <= CONFIG.alertThreshold * 100) {
       alerts.push({
         title: grupo.title,
         sku: grupo.sku,
+        mlb: grupo.mlb,
         available, aCaminho, entradaPendente,
         sales30d, pct: pct.toFixed(1), daysLeft
       });
     }
   }
-  await sendTelegram(alerts);
-  await sendGoogleSheets(alerts);
+  // Deduplica por título (evita linhas repetidas na planilha)
+  const seen = new Set();
+  const alertsUnicos = alerts.filter(a => {
+    const key = a.title;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  console.log(`${alerts.length} alertas -> ${alertsUnicos.length} unicos (${alerts.length - alertsUnicos.length} duplicatas removidas)`);
+
+  await sendTelegram(alertsUnicos);
+  await sendGoogleSheets(alertsUnicos);
+  saveData(alertsUnicos);
 })();
