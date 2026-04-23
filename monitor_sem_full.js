@@ -187,16 +187,34 @@ function saveData(items) {
     if (i % 200 === 0) console.log(`  Processados ${i}/${allIds.length} (encontrados ${items.length} com estoque)...`);
   }
 
-  // Ordena por vendas 30d desc (mais vendidos primeiro)
-  items.sort((a, b) => b.vendas30d - a.vendas30d);
+  // Deduplica por SKU mantendo o anúncio com MAIS VENDAS 30d
+  // (itens sem SKU = N/A ficam todos)
+  const dedupMap = {};
+  const semSku = [];
+  for (const item of items) {
+    if (!item.sku || item.sku === 'N/A') {
+      semSku.push(item);
+      continue;
+    }
+    const exist = dedupMap[item.sku];
+    if (!exist || item.vendas30d > exist.vendas30d) {
+      dedupMap[item.sku] = item;
+    }
+  }
+  const dedupItems = [...Object.values(dedupMap), ...semSku];
 
-  console.log(`Total: ${items.length} anúncios sem Full ATIVOS COM ESTOQUE`);
+  // Ordena por vendas 30d desc (mais vendidos primeiro)
+  dedupItems.sort((a, b) => b.vendas30d - a.vendas30d);
+
+  const removidos = items.length - dedupItems.length;
+  console.log(`${items.length} anuncios -> ${dedupItems.length} apos dedup (${removidos} duplicatas removidas)`);
+  console.log(`  ${Object.keys(dedupMap).length} SKUs unicos + ${semSku.length} sem SKU`);
   console.log(`Top 10 mais vendidos sem Full:`);
-  items.slice(0, 10).forEach((i, idx) => {
+  dedupItems.slice(0, 10).forEach((i, idx) => {
     console.log(`  ${idx+1}. [${i.vendas30d}v] ${i.title.slice(0,60)} | SKU=${i.sku} | MLB=${i.mlb} | est=${i.disponivel}`);
   });
 
-  await sendTelegramResumo(items);
-  await sendGoogleSheets(items);
-  saveData(items);
+  await sendTelegramResumo(dedupItems);
+  await sendGoogleSheets(dedupItems);
+  saveData(dedupItems);
 })();
