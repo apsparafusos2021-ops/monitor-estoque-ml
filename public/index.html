@@ -8,20 +8,20 @@
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
-      --bg:        #2b2e33;   /* cinza grafite (cor base do logo Tork) */
-      --bg2:       #353940;   /* cinza médio para cards */
-      --border:    #424650;
-      --border2:   #525762;
-      --text:      #d8d8d8;
-      --text2:     #9ea2a8;
-      --text3:     #767a82;
-      --white:     #ffffff;
-      --blue:      #6b9eff;
-      --orange:    #ffc72c;   /* AMARELO TORK - cor de destaque */
-      --green:     #4ed170;
-      --red:       #ff5d52;
-      --yellow:    #ffd966;
-      --purple:    #c8a3ff;
+      --bg:        #ffffff;   /* branco (fundo do logo Tork) */
+      --bg2:       #f5f5f5;   /* cinza muito claro para cards */
+      --border:    #e0e0e0;
+      --border2:   #c8c8c8;
+      --text:      #2b2e33;   /* cinza grafite (cor do "Tork TOOLS") */
+      --text2:     #666b73;
+      --text3:     #999da3;
+      --white:     #1a1c20;   /* praticamente preto (alto contraste) */
+      --blue:      #1f6feb;
+      --orange:    #f5b400;   /* AMARELO TORK escurecido para contraste no branco */
+      --green:     #2ea043;
+      --red:       #d1242f;
+      --yellow:    #d29922;
+      --purple:    #8957e5;
     }
 
     body {
@@ -42,14 +42,14 @@
       flex-wrap: wrap;
       position: sticky;
       top: 0;
-      background: rgba(43,46,51,.95);
+      background: rgba(255,255,255,.95);
       backdrop-filter: blur(8px);
       z-index: 100;
     }
     .header-left { display: flex; align-items: center; gap: 12px; }
     .logo-icon {
       width: 32px; height: 32px;
-      background: linear-gradient(135deg, #ffc72c, #f5a800);
+      background: #ffc72c;
       border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
       font-size: 1rem; font-weight: 700; color: #2b2e33;
