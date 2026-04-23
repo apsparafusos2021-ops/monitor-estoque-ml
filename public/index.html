@@ -340,6 +340,9 @@
   <button class="tab" data-tab="estoque" onclick="switchTab('estoque')">
     <span class="tab-icon">⚠️</span> Alertas Estoque <span class="tab-badge" id="badge-estoque">–</span>
   </button>
+  <button class="tab" data-tab="semfull" onclick="switchTab('semfull')">
+    <span class="tab-icon">🚫</span> Sem Fulfillment <span class="tab-badge" id="badge-semfull">–</span>
+  </button>
   <button class="tab" data-tab="nf" onclick="switchTab('nf')">
     <span class="tab-icon">📄</span> Análise NF
   </button>
@@ -361,6 +364,15 @@
     <span class="updated-label" id="estoque-ts">–</span>
   </div>
   <div id="estoque-content"><div class="loading-box"><div class="spinner"></div><span>Buscando dados…</span></div></div>
+</div>
+
+<!-- ── ABA: SEM FULFILLMENT ── -->
+<div id="tab-semfull" class="tab-content">
+  <div class="section-header">
+    <span class="section-title">Anúncios Ativos SEM Fulfillment (com estoque)</span>
+    <span class="updated-label" id="semfull-ts">–</span>
+  </div>
+  <div id="semfull-content"><div class="loading-box"><div class="spinner"></div><span>Buscando dados…</span></div></div>
 </div>
 
 <!-- ── ABA: ANÁLISE NF ── -->
@@ -889,8 +901,8 @@
   let tinyStockMap = {};
 
   async function carregarEstoqueTiny(tipo) {
-    const sel = tipo === 'coleta' ? '.coleta-row-check' : '.estoque-row-check';
-    const btnId = tipo === 'coleta' ? 'btn-coleta-tiny' : 'btn-estoque-tiny';
+    const sel = tipo === 'coleta' ? '.coleta-row-check' : tipo === 'semfull' ? '.semfull-row-check' : '.estoque-row-check';
+    const btnId = tipo === 'coleta' ? 'btn-coleta-tiny' : tipo === 'semfull' ? 'btn-semfull-tiny' : 'btn-estoque-tiny';
     const btn = document.getElementById(btnId);
 
     // Coleta {mlb, sku} de todos os itens visíveis
@@ -924,6 +936,7 @@
 
       // Re-renderiza a tabela para mostrar os estoques
       if (tipo === 'coleta') renderColeta();
+      else if (tipo === 'semfull') renderSemFull();
       else renderEstoque();
     } catch (e) {
       alert('Erro ao buscar estoque: ' + e.message);
@@ -933,12 +946,12 @@
     }
   }
 
-  // ── Função genérica de envio para Slack (Coleta + Estoque) ───────────────
+  // ── Função genérica de envio para Slack (Coleta + Estoque + Sem Full) ─────
   async function enviarSlackGenerico(tipo) {
-    const sel = tipo === 'coleta' ? '.coleta-row-check' : '.estoque-row-check';
-    const qtySel = tipo === 'coleta' ? '.coleta-row-qty' : '.estoque-row-qty';
-    const btnId = tipo === 'coleta' ? 'btn-coleta-slack' : 'btn-estoque-slack';
-    const statusId = tipo === 'coleta' ? 'coleta-slack-status' : 'estoque-slack-status';
+    const sel = tipo === 'coleta' ? '.coleta-row-check' : tipo === 'semfull' ? '.semfull-row-check' : '.estoque-row-check';
+    const qtySel = tipo === 'coleta' ? '.coleta-row-qty' : tipo === 'semfull' ? '.semfull-row-qty' : '.estoque-row-qty';
+    const btnId = tipo === 'coleta' ? 'btn-coleta-slack' : tipo === 'semfull' ? 'btn-semfull-slack' : 'btn-estoque-slack';
+    const statusId = tipo === 'coleta' ? 'coleta-slack-status' : tipo === 'semfull' ? 'semfull-slack-status' : 'estoque-slack-status';
 
     const checkboxes = document.querySelectorAll(sel + ':checked');
     if (checkboxes.length === 0) {
@@ -961,6 +974,11 @@
         const vend = cb.dataset.vend || '0';
         if (qtd) return `${mlb} - Qtd envio: ${qtd} | Vendas 30d: ${vend}`;
         return `${mlb} - Vendas 30d: ${vend}`;
+      } else if (tipo === 'semfull') {
+        const vend = cb.dataset.vend || '0';
+        const sku = cb.dataset.sku || '';
+        if (qtd) return `${mlb} - Qtd envio: ${qtd} | SKU: ${sku} | Vendas 30d: ${vend}`;
+        return `${mlb} | SKU: ${sku} | Vendas 30d: ${vend}`;
       } else {
         if (qtd) return `${mlb} - Qtd envio: ${qtd}`;
         return mlb;
@@ -997,10 +1015,160 @@
     const btn = document.getElementById('btn-refresh');
     btn.disabled = true;
     btn.innerHTML = `<div class="spinner" style="width:13px;height:13px;border-width:2px"></div> Atualizando…`;
-    await Promise.all([loadColeta(true), loadEstoque(true)]);
+    await Promise.all([loadColeta(true), loadEstoque(true), loadSemFull(true)]);
     document.getElementById('last-refresh').textContent = 'Última atualização: ' + agora();
     btn.disabled = false;
     btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg> Atualizar`;
+  }
+
+  // ── ABA SEM FULFILLMENT ───────────────────────────────────────────────────
+  let semfullData = [], semfullPage = 1, semfullBusca = '';
+
+  async function loadSemFull(force = false) {
+    if (force) document.getElementById('semfull-content').innerHTML = spinner();
+    try {
+      const { cols, rows } = await fetchSheet('Anuncios Sem Full');
+      if (!rows.length) {
+        document.getElementById('semfull-content').innerHTML = empty('Nenhum anúncio registrado ainda.<br>O monitor roda todo dia às 11:00 BRT.');
+        document.getElementById('semfull-ts').textContent = 'Atualizado às ' + agora();
+        document.getElementById('badge-semfull').textContent = '0';
+        return;
+      }
+
+      const iProd = cols.findIndex(c => /produto|title/i.test(c));
+      const iSku  = cols.findIndex(c => /^sku/i.test(c));
+      const iMlb  = cols.findIndex(c => /^mlb/i.test(c));
+      const iDisp = cols.findIndex(c => /dispon|available/i.test(c));
+      const iVend = cols.findIndex(c => /vend|sales/i.test(c));
+      const iData = cols.findIndex(c => /^data/i.test(c));
+
+      // Deduplica mantendo a entrada mais recente por MLB
+      const chave = iMlb >= 0 ? iMlb : (iSku >= 0 ? iSku : 0);
+      const dedup = {};
+      for (const row of rows) {
+        const key = row[chave] || '';
+        const dAtual = iData >= 0 ? row[iData] : '';
+        const dExist = dedup[key] ? (iData >= 0 ? dedup[key][iData] : '') : '';
+        if (!dedup[key] || dAtual >= dExist) dedup[key] = row;
+      }
+      const unique = Object.values(dedup);
+
+      semfullData = unique.sort((a, b) => (parseNum(b[iVend]) || 0) - (parseNum(a[iVend]) || 0));
+      semfullPage = 1;
+
+      document.getElementById('badge-semfull').textContent = unique.length;
+      renderSemFull._cols = cols;
+      renderSemFull._idx = { iProd, iSku, iMlb, iDisp, iVend };
+      renderSemFull();
+      document.getElementById('semfull-ts').textContent = 'Atualizado às ' + agora();
+    } catch (e) {
+      document.getElementById('semfull-content').innerHTML = empty('Erro: ' + e.message);
+    }
+  }
+
+  function renderSemFull() {
+    const cols = renderSemFull._cols;
+    const idx = renderSemFull._idx;
+    if (!cols) return;
+    const { iProd, iSku, iMlb, iDisp, iVend } = idx;
+
+    let itens = semfullData;
+    if (semfullBusca) {
+      const q = semfullBusca.toLowerCase();
+      itens = itens.filter(r =>
+        (r[iProd]||'').toLowerCase().includes(q) ||
+        (r[iSku]||'').toLowerCase().includes(q) ||
+        (r[iMlb]||'').toLowerCase().includes(q)
+      );
+    }
+
+    const totalEst = semfullData.reduce((s, r) => s + (parseNum(r[iDisp]) || 0), 0);
+    const totalVend = semfullData.reduce((s, r) => s + (parseNum(r[iVend]) || 0), 0);
+    const comVenda = semfullData.filter(r => (parseNum(r[iVend]) || 0) > 0).length;
+
+    const start = (semfullPage - 1) * PAGE_SIZE;
+    const pageItens = itens.slice(start, start + PAGE_SIZE);
+
+    const rows = pageItens.map(r => {
+      const prod = iProd >= 0 ? r[iProd] : '–';
+      const sku  = iSku  >= 0 ? r[iSku]  : '–';
+      const mlb  = iMlb  >= 0 ? r[iMlb]  : '–';
+      const disp = iDisp >= 0 ? r[iDisp] : '';
+      const vend = iVend >= 0 ? r[iVend] : '';
+      const vendN = parseNum(vend) || 0;
+
+      const tinyEstoque = tinyStockMap[mlb];
+      const tinyCell = tinyEstoque === undefined
+        ? '<span class="cell-muted">–</span>'
+        : tinyEstoque === null
+          ? '<span class="cell-muted" title="Não encontrado no Tiny">?</span>'
+          : `<span style="color:var(--white);font-weight:600">${fmt(tinyEstoque)}</span>`;
+
+      return `<tr>
+        <td style="text-align:center"><input type="checkbox" class="semfull-row-check" data-mlb="${mlb}" data-sku="${sku}" data-vend="${vendN}" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></td>
+        <td><div class="cell-produto tip" data-tip="${prod}">${prod}</div></td>
+        <td class="cell-num">${tinyCell}</td>
+        <td class="cell-mono">${!sku||sku==='N/A'?'<span class="cell-muted">–</span>':sku}</td>
+        <td class="cell-mono">${mlb}</td>
+        <td><input type="number" class="semfull-row-qty" data-mlb="${mlb}" min="0" placeholder="0" style="width:70px;background:var(--bg2);border:1px solid var(--border2);color:var(--text);padding:4px 8px;border-radius:6px;font-size:0.8rem;text-align:right;outline:none"></td>
+        <td class="cell-num">${fmt(disp)}</td>
+        <td class="cell-num">${fmt(vendN)}</td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('semfull-content').innerHTML = `
+      <div class="cards-row">
+        <div class="card-stat accent-blue"><div class="label">Total anúncios</div><div class="value blue">${semfullData.length}</div></div>
+        <div class="card-stat accent-green"><div class="label">Com vendas 30d</div><div class="value green">${comVenda}</div></div>
+        <div class="card-stat accent-orange"><div class="label">Estoque total</div><div class="value orange">${fmt(totalEst)}</div></div>
+        <div class="card-stat accent-purple"><div class="label">Vendas 30d total</div><div class="value purple">${fmt(totalVend)}</div></div>
+      </div>
+
+      <div class="toolbar">
+        <div class="search-wrap">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input class="search-input" type="text" placeholder="Buscar produto, SKU ou MLB…"
+            oninput="semfullBusca=this.value;semfullPage=1;renderSemFull()" value="${semfullBusca}">
+        </div>
+        <span class="row-count">${itens.length} resultados</span>
+      </div>
+
+      <div class="toolbar" style="margin-bottom:12px">
+        <button class="btn" onclick="semfullToggleAll(true)" style="font-size:0.75rem">✓ Selecionar todos</button>
+        <button class="btn" onclick="semfullToggleAll(false)" style="font-size:0.75rem">✗ Limpar</button>
+        <button class="btn" id="btn-semfull-tiny" onclick="carregarEstoqueTiny('semfull')" style="background:rgba(240,136,62,.15);border-color:rgba(240,136,62,.4);color:var(--orange);font-weight:600">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c2.5 0 4-4 4-9s-1.5-9-4-9m0 18c-2.5 0-4-4-4-9s1.5-9 4-9"/></svg>
+          Carregar Estoque Tiny
+        </button>
+        <button class="btn" id="btn-semfull-slack" onclick="enviarSlackGenerico('semfull')" style="background:rgba(63,185,80,.15);border-color:rgba(63,185,80,.4);color:var(--green);font-weight:600">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg>
+          Enviar para Slack
+        </button>
+        <span id="semfull-slack-status" style="font-size:0.78rem;color:var(--text3)"></span>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th style="text-align:center;width:40px"><input type="checkbox" id="semfull-check-all" onchange="semfullToggleAll(this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></th>
+            <th>Produto</th>
+            <th style="text-align:right">Estoque Tiny</th>
+            <th>SKU</th>
+            <th>MLB</th>
+            <th style="width:90px">Qtd Enviar</th>
+            <th style="text-align:right">Disp. ML</th>
+            <th style="text-align:right">Vendas 30d</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      ${buildPagination(itens.length, semfullPage, `function(p){semfullPage=p;renderSemFull();window.scrollTo(0,0)}`)}`;
+  }
+
+  function semfullToggleAll(checked) {
+    document.querySelectorAll('.semfull-row-check').forEach(cb => cb.checked = checked);
+    const h = document.getElementById('semfull-check-all');
+    if (h) h.checked = checked;
   }
 
   // ── ABA ANÁLISE NF — Drag & Drop ──────────────────────────────────────────
@@ -1236,7 +1404,7 @@
 
   // ── Init ──────────────────────────────────────────────────────────────────
   (async () => {
-    await Promise.all([loadColeta(), loadEstoque()]);
+    await Promise.all([loadColeta(), loadEstoque(), loadSemFull()]);
     document.getElementById('last-refresh').textContent = 'Última atualização: ' + agora();
   })();
 </script>
