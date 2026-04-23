@@ -1022,7 +1022,13 @@
   }
 
   // ── ABA SEM FULFILLMENT ───────────────────────────────────────────────────
-  let semfullData = [], semfullPage = 1, semfullBusca = '';
+  let semfullData = [], semfullPage = 1, semfullBusca = '', semfullFiltro = 'todos';
+
+  function semfullSetFiltro(f) {
+    semfullFiltro = (semfullFiltro === f && f !== 'todos') ? 'todos' : f;
+    semfullPage = 1;
+    renderSemFull();
+  }
 
   async function loadSemFull(force = false) {
     if (force) document.getElementById('semfull-content').innerHTML = spinner();
@@ -1081,10 +1087,17 @@
         (r[iMlb]||'').toLowerCase().includes(q)
       );
     }
+    // Filtro por card
+    if (semfullFiltro === 'com_vendas') {
+      itens = itens.filter(r => (parseNum(r[iVend]) || 0) > 0);
+    } else if (semfullFiltro === 'sem_vendas') {
+      itens = itens.filter(r => (parseNum(r[iVend]) || 0) === 0);
+    }
 
     const totalEst = semfullData.reduce((s, r) => s + (parseNum(r[iDisp]) || 0), 0);
     const totalVend = semfullData.reduce((s, r) => s + (parseNum(r[iVend]) || 0), 0);
     const comVenda = semfullData.filter(r => (parseNum(r[iVend]) || 0) > 0).length;
+    const semVenda = semfullData.length - comVenda;
 
     const start = (semfullPage - 1) * PAGE_SIZE;
     const pageItens = itens.slice(start, start + PAGE_SIZE);
@@ -1116,10 +1129,23 @@
       </tr>`;
     }).join('');
 
+    const fAtivo = (f) => semfullFiltro === f ? 'box-shadow:0 0 0 2px var(--blue);transform:translateY(-2px)' : '';
+    const cardClickStyle = 'cursor:pointer;transition:all .15s;user-select:none';
+
     document.getElementById('semfull-content').innerHTML = `
       <div class="cards-row">
-        <div class="card-stat accent-blue"><div class="label">Total anúncios</div><div class="value blue">${semfullData.length}</div></div>
-        <div class="card-stat accent-green"><div class="label">Com vendas 30d</div><div class="value green">${comVenda}</div></div>
+        <div class="card-stat accent-blue" onclick="semfullSetFiltro('todos')" style="${cardClickStyle};${fAtivo('todos')}" title="Mostrar todos">
+          <div class="label">Total anúncios ${semfullFiltro==='todos' ? '✓' : ''}</div>
+          <div class="value blue">${semfullData.length}</div>
+        </div>
+        <div class="card-stat accent-green" onclick="semfullSetFiltro('com_vendas')" style="${cardClickStyle};${fAtivo('com_vendas')}" title="Filtrar somente com vendas">
+          <div class="label">Com vendas 30d ${semfullFiltro==='com_vendas' ? '✓' : ''}</div>
+          <div class="value green">${comVenda}</div>
+        </div>
+        <div class="card-stat accent-red" onclick="semfullSetFiltro('sem_vendas')" style="${cardClickStyle};${fAtivo('sem_vendas')}" title="Filtrar somente sem vendas">
+          <div class="label">Sem vendas 30d ${semfullFiltro==='sem_vendas' ? '✓' : ''}</div>
+          <div class="value red">${semVenda}</div>
+        </div>
         <div class="card-stat accent-orange"><div class="label">Estoque total</div><div class="value orange">${fmt(totalEst)}</div></div>
         <div class="card-stat accent-purple"><div class="label">Vendas 30d total</div><div class="value purple">${fmt(totalVend)}</div></div>
       </div>
