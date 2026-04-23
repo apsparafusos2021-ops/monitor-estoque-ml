@@ -3,25 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Monitor ML</title>
+  <title>Monitor Tork Tools</title>
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
-      --bg:        #0d1117;
-      --bg2:       #161b22;
-      --border:    #21262d;
-      --border2:   #30363d;
-      --text:      #c9d1d9;
-      --text2:     #8b949e;
-      --text3:     #6e7681;
-      --white:     #f0f6fc;
-      --blue:      #58a6ff;
-      --orange:    #f0883e;
-      --green:     #3fb950;
-      --red:       #f85149;
-      --yellow:    #d29922;
-      --purple:    #bc8cff;
+      --bg:        #2b2e33;   /* cinza grafite (cor base do logo Tork) */
+      --bg2:       #353940;   /* cinza médio para cards */
+      --border:    #424650;
+      --border2:   #525762;
+      --text:      #d8d8d8;
+      --text2:     #9ea2a8;
+      --text3:     #767a82;
+      --white:     #ffffff;
+      --blue:      #6b9eff;
+      --orange:    #ffc72c;   /* AMARELO TORK - cor de destaque */
+      --green:     #4ed170;
+      --red:       #ff5d52;
+      --yellow:    #ffd966;
+      --purple:    #c8a3ff;
     }
 
     body {
@@ -42,18 +42,19 @@
       flex-wrap: wrap;
       position: sticky;
       top: 0;
-      background: rgba(13,17,23,.95);
+      background: rgba(43,46,51,.95);
       backdrop-filter: blur(8px);
       z-index: 100;
     }
     .header-left { display: flex; align-items: center; gap: 12px; }
     .logo-icon {
       width: 32px; height: 32px;
-      background: linear-gradient(135deg, #f0883e, #58a6ff);
+      background: linear-gradient(135deg, #ffc72c, #f5a800);
       border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 1rem; font-weight: 700; color: #fff;
+      font-size: 1rem; font-weight: 700; color: #2b2e33;
       flex-shrink: 0;
+      border: 2px solid #2b2e33;
     }
     .header-left h1 { font-size: 1rem; font-weight: 600; color: var(--white); }
     .header-left .sub { font-size: 0.72rem; color: var(--text3); margin-top: 1px; }
@@ -318,9 +319,9 @@
 
 <header>
   <div class="header-left">
-    <div class="logo-icon">M</div>
+    <div class="logo-icon">T</div>
     <div>
-      <h1>Monitor Mercado Livre</h1>
+      <h1>Monitor Tork Tools</h1>
       <div class="sub" id="last-refresh">Carregando…</div>
     </div>
   </div>
