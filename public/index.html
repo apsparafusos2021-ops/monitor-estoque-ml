@@ -513,6 +513,23 @@
 
   // ── ABA COLETA CD ─────────────────────────────────────────────────────────
   let coletaData = [], coletaRawRows = [], coletaPage = 1, coletaFiltro = 'todos', coletaBusca = '', coletaDataSel = 'todas', coletaDatasDisponiveis = [];
+  // Estado "Visto" persistido em localStorage por MLB (manual, nunca reseta)
+  let coletaVistos = JSON.parse(localStorage.getItem('coletaVistos') || '{}');
+  let coletaOcultarVistos = (localStorage.getItem('coletaOcultarVistos') ?? '0') === '1';
+
+  function coletaToggleVisto(mlb, checked) {
+    if (checked) coletaVistos[mlb] = true;
+    else delete coletaVistos[mlb];
+    localStorage.setItem('coletaVistos', JSON.stringify(coletaVistos));
+    if (coletaOcultarVistos) renderColeta();
+  }
+
+  function coletaToggleOcultarVistos() {
+    coletaOcultarVistos = !coletaOcultarVistos;
+    localStorage.setItem('coletaOcultarVistos', coletaOcultarVistos ? '1' : '0');
+    coletaPage = 1;
+    renderColeta();
+  }
 
   async function loadColeta(force = false) {
     if (force) document.getElementById('coleta-content').innerHTML = spinner();
@@ -586,14 +603,9 @@
     }
     if (coletaFiltro === 'ff') itens = itens.filter(i => i.log.includes('fulfillment'));
     if (coletaFiltro === 'cd') itens = itens.filter(i => !i.log.includes('fulfillment'));
-    // Filtro em-trânsito: usa dados do mlStockMap (carregado sob demanda via botão)
-    // Oculta MLB cujo mlStockMap tenha aCaminho>0 OU entradaPendente>0
-    if (filtroEmTransito) {
-      itens = itens.filter(i => {
-        const ml = mlStockMap[i.mlb];
-        if (!ml) return true; // sem dados ainda = não filtra
-        return !(ml.aCaminho > 0 || ml.entradaPendente > 0);
-      });
+    // Filtro Visto: oculta MLBs já marcados como vistos pelo usuário
+    if (coletaOcultarVistos) {
+      itens = itens.filter(i => !coletaVistos[i.mlb]);
     }
 
     const totalUn = itens.reduce((s, i) => s + i.qtd, 0);
@@ -632,22 +644,17 @@
       const ml = mlStockMap[i.mlb];
       const cell = (v) => v === undefined ? '<span class="cell-muted">–</span>'
         : `<span style="color:var(--white);font-weight:600">${fmt(v)}</span>`;
-      const caminhoCell = ml && ml.aCaminho > 0
-        ? `<span style="color:var(--yellow);font-weight:700">${fmt(ml.aCaminho)}</span>`
-        : (ml ? '<span class="cell-muted">0</span>' : '<span class="cell-muted">–</span>');
-      const pendenteCell = ml && ml.entradaPendente > 0
-        ? `<span style="color:var(--orange);font-weight:700">${fmt(ml.entradaPendente)}</span>`
-        : (ml ? '<span class="cell-muted">0</span>' : '<span class="cell-muted">–</span>');
-      return `<tr>
+      const isVisto = !!coletaVistos[i.mlb];
+      const trStyle = isVisto ? 'opacity:0.5;background:rgba(63,185,80,.04)' : '';
+      return `<tr style="${trStyle}">
         <td style="text-align:center"><input type="checkbox" class="coleta-row-check" data-mlb="${i.mlb}" data-sku="${i.sku}" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></td>
         <td><div class="cell-produto tip" data-tip="${i.prod}">${i.prod}</div></td>
         <td class="cell-mono">${i.mlb}</td>
         <td class="cell-num">${cell(ml?.disponivel)}</td>
-        <td class="cell-num">${caminhoCell}</td>
-        <td class="cell-num">${pendenteCell}</td>
         <td><input type="number" class="coleta-row-qty" data-mlb="${i.mlb}" min="0" placeholder="0" style="width:70px;background:var(--bg2);border:1px solid var(--border2);color:var(--text);padding:4px 8px;border-radius:6px;font-size:0.8rem;text-align:right;outline:none"></td>
         <td class="cell-num">${fmt(i.qtd)}</td>
         <td>${logBadge}</td>
+        <td style="text-align:center"><input type="checkbox" class="coleta-row-visto" data-mlb="${i.mlb}" ${isVisto?'checked':''} onchange="coletaToggleVisto('${i.mlb}', this.checked)" title="Marcado = ja enviei pro Full" style="width:18px;height:18px;cursor:pointer;accent-color:var(--green)"></td>
       </tr>`;
     }).join('');
 
@@ -698,7 +705,9 @@
       <div class="toolbar" style="margin-bottom:12px">
         <button class="btn" onclick="coletaToggleAll(true)" style="font-size:0.75rem">✓ Selecionar todos</button>
         <button class="btn" onclick="coletaToggleAll(false)" style="font-size:0.75rem">✗ Limpar</button>
-        ${renderToggleEmTransito()}
+        <button class="btn" onclick="coletaToggleOcultarVistos()" style="font-size:0.75rem;background:${coletaOcultarVistos?'rgba(63,185,80,.15)':'transparent'};border-color:${coletaOcultarVistos?'rgba(63,185,80,.4)':'var(--border2)'};color:${coletaOcultarVistos?'var(--green)':'var(--text)'};font-weight:600" title="Mostrar/ocultar produtos ja marcados como Visto">
+          ${coletaOcultarVistos ? '👁️‍🗨️ Ocultando vistos' : '👁️ Mostrando vistos'} (${Object.keys(coletaVistos).length})
+        </button>
         <button class="btn" id="btn-coleta-ml" onclick="carregarEstoqueML('coleta')" style="background:rgba(88,166,255,.15);border-color:rgba(88,166,255,.4);color:var(--blue);font-weight:600">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c2.5 0 4-4 4-9s-1.5-9-4-9m0 18c-2.5 0-4-4-4-9s1.5-9 4-9"/></svg>
           Carregar Estoque ML
@@ -717,11 +726,10 @@
             <th>Produto</th>
             <th>MLB</th>
             <th style="text-align:right">Estoque ML</th>
-            <th style="text-align:right" title="A caminho para o Full">À caminho</th>
-            <th style="text-align:right" title="Entrada pendente no Full">Entrada pend.</th>
             <th style="width:90px">Qtd Enviar</th>
             <th style="text-align:right">Qtd. Total</th>
             <th>Logística</th>
+            <th style="text-align:center;width:60px" title="Marque para indicar 'ja enviei pro Full'">Visto</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
