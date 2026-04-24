@@ -201,19 +201,35 @@ function saveData(alerts) {
   const grupos = agruparPorInventario(todosItens);
   console.log(`${Object.keys(grupos).length} inventarios unicos encontrados.`);
   const alerts = [];
+  const emTransito = []; // Itens com aCaminho > 0 ou entradaPendente > 0 (independente de vendas)
   for (const grupo of Object.values(grupos)) {
     const idsArray = Array.from(grupo.ids);
+
+    // Busca estoque ANTES do filtro de vendas para capturar TODOS os em trânsito
+    await sleep(300);
+    const estoque = await getEstoqueInventario(grupo.inventoryId, token);
+    const available = estoque.available;
+    const aCaminho = estoque.aCaminho;
+    const entradaPendente = estoque.entradaPendente;
+
+    // Captura para "em trânsito" se houver remessa pendente (mesmo sem vendas)
+    if (aCaminho > 0 || entradaPendente > 0) {
+      emTransito.push({
+        title: grupo.title,
+        sku: grupo.sku,
+        mlb: grupo.mlb,
+        available, aCaminho, entradaPendente,
+      });
+    }
+
+    // Busca vendas 30d
     let sales30d = 0;
     for (const id of idsArray) {
       await sleep(500);
       sales30d += await getSales30d(id, token);
     }
     if (sales30d === 0) continue;
-    await sleep(300);
-    const estoque = await getEstoqueInventario(grupo.inventoryId, token);
-    const available = estoque.available;
-    const aCaminho = estoque.aCaminho;
-    const entradaPendente = estoque.entradaPendente;
+
     const pct = (available / sales30d) * 100;
     const daysLeft = Math.round(available / (sales30d / 30));
     console.log(`${grupo.title}: SKU=${grupo.sku} MLB=${grupo.mlb} disponivel=${available} aCaminho=${aCaminho} entradaPendente=${entradaPendente} vendas30d=${sales30d} pct=${pct.toFixed(1)}%`);
@@ -236,8 +252,23 @@ function saveData(alerts) {
     return true;
   });
   console.log(`${alerts.length} alertas -> ${alertsUnicos.length} unicos (${alerts.length - alertsUnicos.length} duplicatas removidas)`);
+  console.log(`${emTransito.length} itens em transito (a caminho ou entrada pendente)`);
 
   await sendTelegram(alertsUnicos);
   await sendGoogleSheets(alertsUnicos);
   saveData(alertsUnicos);
+
+  // Envia "em trânsito" como um tipo separado para nova aba
+  if (emTransito.length > 0 && CONFIG.googleSheetUrl) {
+    try {
+      await fetchComRetry(CONFIG.googleSheetUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alerts: emTransito, tipo: 'em_transito' }),
+      });
+      console.log('Em transito enviado para o Google Sheets!');
+    } catch (e) {
+      console.log('Erro ao enviar em transito:', e.message);
+    }
+  }
 })();
