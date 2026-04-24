@@ -586,6 +586,8 @@
     }
     if (coletaFiltro === 'ff') itens = itens.filter(i => i.log.includes('fulfillment'));
     if (coletaFiltro === 'cd') itens = itens.filter(i => !i.log.includes('fulfillment'));
+    // Filtro: oculta itens em trânsito
+    if (filtroEmTransito) itens = itens.filter(i => !isEmTransito(i.mlb, i.sku));
 
     const totalUn = itens.reduce((s, i) => s + i.qtd, 0);
     const ffUn    = itens.filter(i => i.log.includes('fulfillment')).reduce((s,i) => s+i.qtd, 0);
@@ -685,6 +687,7 @@
       <div class="toolbar" style="margin-bottom:12px">
         <button class="btn" onclick="coletaToggleAll(true)" style="font-size:0.75rem">✓ Selecionar todos</button>
         <button class="btn" onclick="coletaToggleAll(false)" style="font-size:0.75rem">✗ Limpar</button>
+        ${renderToggleEmTransito()}
         <button class="btn" id="btn-coleta-tiny" onclick="carregarEstoqueTiny('coleta')" style="background:rgba(240,136,62,.15);border-color:rgba(240,136,62,.4);color:var(--orange);font-weight:600">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c2.5 0 4-4 4-9s-1.5-9-4-9m0 18c-2.5 0-4-4-4-9s1.5-9 4-9"/></svg>
           Carregar Estoque Tiny
@@ -722,6 +725,40 @@
 
   // ── ABA ESTOQUE ───────────────────────────────────────────────────────────
   let estoqueData = [], estoquePage = 1, estoqueBusca = '', estoqueFiltro = 'todos';
+
+  // ── Filtro global "em trânsito" (à caminho ou entrada pendente) ──────────
+  // Set populado após carregar Alertas Estoque, contém MLBs+SKUs em trânsito
+  let emTransitoMLBs = new Set();
+  let emTransitoSKUs = new Set();
+  let filtroEmTransito = (localStorage.getItem('filtroEmTransito') ?? '1') === '1';
+
+  function isEmTransito(mlb, sku) {
+    if (mlb && emTransitoMLBs.has(String(mlb).trim())) return true;
+    if (sku && sku !== 'N/A' && emTransitoSKUs.has(String(sku).trim())) return true;
+    return false;
+  }
+
+  function toggleFiltroEmTransito() {
+    filtroEmTransito = !filtroEmTransito;
+    localStorage.setItem('filtroEmTransito', filtroEmTransito ? '1' : '0');
+    renderColeta && renderColeta();
+    renderEstoque && renderEstoque();
+    renderSemFull && renderSemFull();
+  }
+
+  function renderToggleEmTransito() {
+    const total = emTransitoMLBs.size + emTransitoSKUs.size;
+    if (total === 0) return '';
+    const ativo = filtroEmTransito;
+    const cor = ativo ? 'var(--blue)' : 'var(--text3)';
+    const bg = ativo ? 'rgba(31,111,235,.12)' : 'transparent';
+    const borda = ativo ? 'rgba(31,111,235,.4)' : 'var(--border2)';
+    const icone = ativo ? '🚫' : '👁️';
+    const texto = ativo
+      ? `${icone} Ocultando ${emTransitoMLBs.size} em trânsito (clique p/ ver)`
+      : `${icone} Mostrando todos (clique p/ ocultar trânsito)`;
+    return `<button class="btn" onclick="toggleFiltroEmTransito()" style="background:${bg};border-color:${borda};color:${cor};font-size:0.75rem;font-weight:600">${texto}</button>`;
+  }
 
   async function loadEstoque(force = false) {
     if (force) document.getElementById('estoque-content').innerHTML = spinner();
@@ -761,6 +798,23 @@
       estoqueData = uniqueRows.sort((a,b) => (parseNum(a[iDias])||999) - (parseNum(b[iDias])||999));
       estoquePage = 1;
 
+      // Popula Set de itens "em trânsito" (à caminho > 0 ou entrada pendente > 0)
+      emTransitoMLBs = new Set();
+      emTransitoSKUs = new Set();
+      for (const row of uniqueRows) {
+        const cam = parseNum(iCam >= 0 ? row[iCam] : 0) || 0;
+        const ent = parseNum(iEnt >= 0 ? row[iEnt] : 0) || 0;
+        if (cam > 0 || ent > 0) {
+          const mlb = iMlb >= 0 ? String(row[iMlb] || '').trim() : '';
+          const sku = iSku >= 0 ? String(row[iSku] || '').trim() : '';
+          if (mlb) emTransitoMLBs.add(mlb);
+          if (sku && sku !== 'N/A') emTransitoSKUs.add(sku);
+        }
+      }
+      // Re-renderiza outras abas que dependem do Set
+      if (typeof coletaData !== 'undefined' && coletaData.length) renderColeta();
+      if (typeof semfullData !== 'undefined' && semfullData.length) renderSemFull();
+
       document.getElementById('badge-estoque').textContent = uniqueRows.length;
       renderEstoque(cols, { iSku, iMlb, iProd, iDisp, iCam, iEnt, iVend, iPct, iDias });
       document.getElementById('estoque-ts').textContent = 'Atualizado às ' + agora();
@@ -787,6 +841,14 @@
     if (estoqueFiltro === 'critico') itens = itens.filter(r => parseNum(r[iDias]) <= 7);
     if (estoqueFiltro === 'alerta')  itens = itens.filter(r => { const d=parseNum(r[iDias]); return d>7&&d<=20; });
     if (estoqueFiltro === 'ok')      itens = itens.filter(r => parseNum(r[iDias]) > 20);
+    // Filtro: oculta itens em trânsito
+    if (filtroEmTransito) {
+      itens = itens.filter(r => {
+        const cam = parseNum(iCam>=0 ? r[iCam] : 0) || 0;
+        const ent = parseNum(iEnt>=0 ? r[iEnt] : 0) || 0;
+        return !(cam > 0 || ent > 0);
+      });
+    }
 
     const criticos = estoqueData.filter(r => parseNum(r[iDias]) <= 7).length;
     const alertas  = estoqueData.filter(r => { const d=parseNum(r[iDias]); return d>7&&d<=20; }).length;
@@ -861,6 +923,7 @@
       <div class="toolbar" style="margin-bottom:12px">
         <button class="btn" onclick="estoqueToggleAll(true)" style="font-size:0.75rem">✓ Selecionar todos</button>
         <button class="btn" onclick="estoqueToggleAll(false)" style="font-size:0.75rem">✗ Limpar</button>
+        ${renderToggleEmTransito()}
         <button class="btn" id="btn-estoque-tiny" onclick="carregarEstoqueTiny('estoque')" style="background:rgba(240,136,62,.15);border-color:rgba(240,136,62,.4);color:var(--orange);font-weight:600">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c2.5 0 4-4 4-9s-1.5-9-4-9m0 18c-2.5 0-4-4-4-9s1.5-9 4-9"/></svg>
           Carregar Estoque Tiny
@@ -1125,6 +1188,14 @@
     } else if (semfullFiltro === 'sem_vendas') {
       itens = itens.filter(r => (parseNum(r[iVend]) || 0) === 0);
     }
+    // Filtro: oculta itens em trânsito (cruza pelo MLB ou SKU)
+    if (filtroEmTransito) {
+      itens = itens.filter(r => {
+        const mlb = iMlb >= 0 ? String(r[iMlb] || '').trim() : '';
+        const sku = iSku >= 0 ? String(r[iSku] || '').trim() : '';
+        return !isEmTransito(mlb, sku);
+      });
+    }
 
     const totalEst = semfullData.reduce((s, r) => s + (parseNum(r[iDisp]) || 0), 0);
     const totalVend = semfullData.reduce((s, r) => s + (parseNum(r[iVend]) || 0), 0);
@@ -1194,6 +1265,7 @@
       <div class="toolbar" style="margin-bottom:12px">
         <button class="btn" onclick="semfullToggleAll(true)" style="font-size:0.75rem">✓ Selecionar todos</button>
         <button class="btn" onclick="semfullToggleAll(false)" style="font-size:0.75rem">✗ Limpar</button>
+        ${renderToggleEmTransito()}
         <button class="btn" id="btn-semfull-tiny" onclick="carregarEstoqueTiny('semfull')" style="background:rgba(240,136,62,.15);border-color:rgba(240,136,62,.4);color:var(--orange);font-weight:600">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c2.5 0 4-4 4-9s-1.5-9-4-9m0 18c-2.5 0-4-4-4-9s1.5-9 4-9"/></svg>
           Carregar Estoque Tiny
