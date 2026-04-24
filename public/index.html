@@ -982,16 +982,19 @@
       const dispN = parseNum(disp) || 0;
       const vendN = parseNum(vend) || 0;
 
-      const ml = mlStockMap[mlb];
-      const mlCell = ml === undefined
+      const tinyEstoque = tinyStockMap[mlb];
+      const tinyCell = tinyEstoque === undefined
         ? '<span class="cell-muted">–</span>'
-        : `<span style="color:var(--white);font-weight:600">${fmt(ml.disponivel)}</span>`;
+        : tinyEstoque === null
+          ? '<span class="cell-muted" title="Não encontrado no Tiny">?</span>'
+          : `<span style="color:var(--white);font-weight:600">${fmt(tinyEstoque)}</span>`;
       const isVisto = !!vistos[mlb];
       const trStyle = isVisto ? 'opacity:0.5;background:rgba(63,185,80,.04)' : '';
       return `<tr style="${trStyle}">
         <td style="text-align:center"><input type="checkbox" class="estoque-row-check" data-mlb="${mlb}" data-sku="${sku}" data-vend="${vendN}" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></td>
         <td><div class="cell-produto tip" data-tip="${prod}">${prod}</div></td>
-        <td class="cell-num">${mlCell}</td>
+        <td class="cell-num">${tinyCell}</td>
+        <td class="cell-mono">${!sku||sku==='N/A'?'<span class="cell-muted">–</span>':sku}</td>
         ${iMlb>=0?`<td class="cell-mono">${mlb}</td>`:''}
         <td><input type="number" class="estoque-row-qty" data-mlb="${mlb}" min="0" placeholder="0" style="width:70px;background:var(--bg2);border:1px solid var(--border2);color:var(--text);padding:4px 8px;border-radius:6px;font-size:0.8rem;text-align:right;outline:none"></td>
         ${iDisp>=0?`<td class="cell-num">${fmt(disp)}</td>`:''}
@@ -1033,9 +1036,9 @@
         <button class="btn" onclick="estoqueToggleAll(true)" style="font-size:0.75rem">✓ Selecionar todos</button>
         <button class="btn" onclick="estoqueToggleAll(false)" style="font-size:0.75rem">✗ Limpar</button>
         ${renderBotaoOcultarVistos()}
-        <button class="btn" id="btn-estoque-ml" onclick="carregarEstoqueML('estoque')" style="background:rgba(88,166,255,.15);border-color:rgba(88,166,255,.4);color:var(--blue);font-weight:600">
+        <button class="btn" id="btn-estoque-tiny" onclick="carregarEstoqueTiny('estoque')" style="background:rgba(240,136,62,.15);border-color:rgba(240,136,62,.4);color:var(--orange);font-weight:600">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c2.5 0 4-4 4-9s-1.5-9-4-9m0 18c-2.5 0-4-4-4-9s1.5-9 4-9"/></svg>
-          Carregar Estoque ML
+          Carregar Estoque Tiny
         </button>
         <button class="btn" id="btn-estoque-slack" onclick="enviarSlackGenerico('estoque')" style="background:rgba(63,185,80,.15);border-color:rgba(63,185,80,.4);color:var(--green);font-weight:600">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg>
@@ -1049,7 +1052,8 @@
           <thead><tr>
             <th style="text-align:center;width:40px"><input type="checkbox" id="estoque-check-all" onchange="estoqueToggleAll(this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></th>
             <th>Produto</th>
-            <th style="text-align:right">Estoque ML</th>
+            <th style="text-align:right">Estoque Tiny</th>
+            <th>SKU</th>
             ${iMlb>=0?'<th>MLB</th>':''}
             <th style="width:90px">Qtd Enviar</th>
             ${iDisp>=0?'<th style="text-align:right">Disponível</th>':''}
@@ -1235,13 +1239,26 @@
     if (e.key !== 'Enter') return;
     const tag = (e.target.tagName || '').toUpperCase();
     if (tag === 'TEXTAREA' || tag === 'SELECT') return;
+    let isQty = false;
     if (tag === 'INPUT') {
       // Permite Enter nos campos "Qtd Enviar" (envio direto sem precisar tirar foco)
       const cls = String(e.target.className || '');
-      const isQty = /-row-qty\b/.test(cls);
+      isQty = /-row-qty\b/.test(cls) || /nf-row-qty\b/.test(cls);
       if (!isQty) {
         const tipoTexto = ['text', 'number', 'search', 'email', 'tel', 'url', 'password'];
         if (tipoTexto.includes((e.target.type || '').toLowerCase())) return;
+      }
+    }
+    // Se Enter foi apertado dentro de um campo Qtd com valor > 0, marca
+    // o checkbox da linha automaticamente (evita exigir clique manual)
+    if (isQty) {
+      const val = Number(e.target.value || 0);
+      if (val > 0) {
+        const row = e.target.closest('tr');
+        if (row) {
+          const cb = row.querySelector('input[type="checkbox"][class$="-row-check"]');
+          if (cb && !cb.checked) cb.checked = true;
+        }
       }
     }
     const ativa = document.querySelector('.tab-content.active');
