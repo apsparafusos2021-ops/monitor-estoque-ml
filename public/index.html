@@ -1002,6 +1002,14 @@
       if (!res.ok) throw new Error(data.error || 'Erro desconhecido');
       status.textContent = `✓ ${data.count} item(ns) enviado(s) ao Slack`;
       status.style.color = 'var(--green)';
+      // Limpa checkboxes e quantidades após envio bem-sucedido
+      document.querySelectorAll(sel).forEach(cb => cb.checked = false);
+      document.querySelectorAll(qtySel).forEach(inp => inp.value = '');
+      const headerCheck = document.getElementById(
+        tipo === 'coleta' ? 'coleta-check-all' :
+        tipo === 'semfull' ? 'semfull-check-all' : 'estoque-check-all'
+      );
+      if (headerCheck) headerCheck.checked = false;
     } catch (e) {
       status.textContent = '✗ Erro: ' + e.message;
       status.style.color = 'var(--red)';
@@ -1010,6 +1018,20 @@
       btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg> Enviar para Slack';
     }
   }
+
+  // ── Atalho Enter: envia pro Slack na aba ativa ───────────────────────────
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    // Não dispara se usuário está digitando em input/textarea/select
+    const tag = (e.target.tagName || '').toUpperCase();
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    const ativa = document.querySelector('.tab-content.active');
+    if (!ativa) return;
+    if (ativa.id === 'tab-coleta') enviarSlackGenerico('coleta');
+    else if (ativa.id === 'tab-estoque') enviarSlackGenerico('estoque');
+    else if (ativa.id === 'tab-semfull') enviarSlackGenerico('semfull');
+    else if (ativa.id === 'tab-nf') enviarSlack();
+  });
 
   // ── Refresh geral ─────────────────────────────────────────────────────────
   async function refreshTudo() {
@@ -1418,6 +1440,11 @@
       if (!res.ok) throw new Error(data.error || 'Erro desconhecido');
       status.textContent = `✓ ${data.count} EAN(s) enviados ao Slack`;
       status.style.color = 'var(--green)';
+      // Limpa checkboxes e quantidades após envio bem-sucedido
+      document.querySelectorAll('.nf-row-check').forEach(cb => cb.checked = false);
+      document.querySelectorAll('.nf-row-qty').forEach(inp => inp.value = '');
+      const headerCheck = document.getElementById('nf-check-all');
+      if (headerCheck) headerCheck.checked = false;
     } catch (e) {
       status.textContent = '✗ Erro: ' + e.message;
       status.style.color = 'var(--red)';
