@@ -327,6 +327,14 @@
   </div>
   <div class="header-right">
     <span class="auto-badge" style="color:var(--text3);border-color:var(--border2);background:var(--bg2)"><span class="pulse" style="background:var(--text3);animation:none"></span> Manual</span>
+    <button class="btn" onclick="exportarVistos()" title="Baixar JSON com os MLBs marcados como Visto">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Exportar vistos
+    </button>
+    <button class="btn" onclick="importarVistos()" title="Carregar JSON com MLBs marcados como Visto">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Importar vistos
+    </button>
     <button class="btn" id="btn-refresh" onclick="refreshTudo()">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
       Atualizar
@@ -513,22 +521,99 @@
 
   // ── ABA COLETA CD ─────────────────────────────────────────────────────────
   let coletaData = [], coletaRawRows = [], coletaPage = 1, coletaFiltro = 'todos', coletaBusca = '', coletaDataSel = 'todas', coletaDatasDisponiveis = [];
-  // Estado "Visto" persistido em localStorage por MLB (manual, nunca reseta)
-  let coletaVistos = JSON.parse(localStorage.getItem('coletaVistos') || '{}');
-  let coletaOcultarVistos = (localStorage.getItem('coletaOcultarVistos') ?? '0') === '1';
 
-  function coletaToggleVisto(mlb, checked) {
-    if (checked) coletaVistos[mlb] = true;
-    else delete coletaVistos[mlb];
-    localStorage.setItem('coletaVistos', JSON.stringify(coletaVistos));
-    if (coletaOcultarVistos) renderColeta();
+  // ═══════════════════════════════════════════════════════════════════════
+  // Estado "Visto" GLOBAL (compartilhado entre todas as abas)
+  // Persistido em localStorage por MLB - manual, nunca reseta
+  // ═══════════════════════════════════════════════════════════════════════
+  let vistos = JSON.parse(localStorage.getItem('vistos') || '{}');
+  let ocultarVistos = (localStorage.getItem('ocultarVistos') ?? '0') === '1';
+
+  function toggleVisto(mlb, checked) {
+    if (checked) vistos[mlb] = true;
+    else delete vistos[mlb];
+    localStorage.setItem('vistos', JSON.stringify(vistos));
+    if (ocultarVistos) {
+      renderColeta && renderColeta();
+      renderEstoque && renderEstoque();
+      renderSemFull && renderSemFull();
+    }
   }
 
-  function coletaToggleOcultarVistos() {
-    coletaOcultarVistos = !coletaOcultarVistos;
-    localStorage.setItem('coletaOcultarVistos', coletaOcultarVistos ? '1' : '0');
+  function marcarVistosBatch(mlbs) {
+    for (const mlb of mlbs) {
+      if (mlb) vistos[mlb] = true;
+    }
+    localStorage.setItem('vistos', JSON.stringify(vistos));
+    renderColeta && renderColeta();
+    renderEstoque && renderEstoque();
+    renderSemFull && renderSemFull();
+  }
+
+  function toggleOcultarVistos() {
+    ocultarVistos = !ocultarVistos;
+    localStorage.setItem('ocultarVistos', ocultarVistos ? '1' : '0');
     coletaPage = 1;
-    renderColeta();
+    estoquePage = 1;
+    semfullPage = 1;
+    renderColeta && renderColeta();
+    renderEstoque && renderEstoque();
+    renderSemFull && renderSemFull();
+  }
+
+  // Botão reutilizável pra cada aba
+  function renderBotaoOcultarVistos() {
+    const total = Object.keys(vistos).length;
+    const bg = ocultarVistos ? 'rgba(63,185,80,.15)' : 'transparent';
+    const borda = ocultarVistos ? 'rgba(63,185,80,.4)' : 'var(--border2)';
+    const cor = ocultarVistos ? 'var(--green)' : 'var(--text)';
+    const icone = ocultarVistos ? '👁️‍🗨️ Ocultando vistos' : '👁️ Mostrando vistos';
+    return `<button class="btn" onclick="toggleOcultarVistos()" style="font-size:0.75rem;background:${bg};border-color:${borda};color:${cor};font-weight:600" title="Mostrar/ocultar produtos marcados como Visto">${icone} (${total})</button>`;
+  }
+
+  // ── Exportar / Importar vistos ──────────────────────────────────────────
+  function exportarVistos() {
+    const data = {
+      exportedAt: new Date().toISOString(),
+      vistos: Object.keys(vistos),
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vistos-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function importarVistos() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json,.json';
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const data = JSON.parse(ev.target.result);
+          const lista = Array.isArray(data) ? data : (data.vistos || []);
+          if (!lista.length) { alert('Arquivo sem MLBs válidos'); return; }
+          const modo = confirm(`Importar ${lista.length} MLBs?\n\nOK = substituir os vistos atuais\nCancelar = adicionar aos existentes`);
+          if (modo) vistos = {};
+          for (const mlb of lista) vistos[mlb] = true;
+          localStorage.setItem('vistos', JSON.stringify(vistos));
+          alert(`✓ Importados. Total agora: ${Object.keys(vistos).length} vistos.`);
+          renderColeta && renderColeta();
+          renderEstoque && renderEstoque();
+          renderSemFull && renderSemFull();
+        } catch (err) {
+          alert('Erro ao ler arquivo: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
   }
 
   async function loadColeta(force = false) {
@@ -604,8 +689,8 @@
     if (coletaFiltro === 'ff') itens = itens.filter(i => i.log.includes('fulfillment'));
     if (coletaFiltro === 'cd') itens = itens.filter(i => !i.log.includes('fulfillment'));
     // Filtro Visto: oculta MLBs já marcados como vistos pelo usuário
-    if (coletaOcultarVistos) {
-      itens = itens.filter(i => !coletaVistos[i.mlb]);
+    if (ocultarVistos) {
+      itens = itens.filter(i => !vistos[i.mlb]);
     }
 
     const totalUn = itens.reduce((s, i) => s + i.qtd, 0);
@@ -644,7 +729,7 @@
       const ml = mlStockMap[i.mlb];
       const cell = (v) => v === undefined ? '<span class="cell-muted">–</span>'
         : `<span style="color:var(--white);font-weight:600">${fmt(v)}</span>`;
-      const isVisto = !!coletaVistos[i.mlb];
+      const isVisto = !!vistos[i.mlb];
       const trStyle = isVisto ? 'opacity:0.5;background:rgba(63,185,80,.04)' : '';
       return `<tr style="${trStyle}">
         <td style="text-align:center"><input type="checkbox" class="coleta-row-check" data-mlb="${i.mlb}" data-sku="${i.sku}" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></td>
@@ -654,7 +739,7 @@
         <td><input type="number" class="coleta-row-qty" data-mlb="${i.mlb}" min="0" placeholder="0" style="width:70px;background:var(--bg2);border:1px solid var(--border2);color:var(--text);padding:4px 8px;border-radius:6px;font-size:0.8rem;text-align:right;outline:none"></td>
         <td class="cell-num">${fmt(i.qtd)}</td>
         <td>${logBadge}</td>
-        <td style="text-align:center"><input type="checkbox" class="coleta-row-visto" data-mlb="${i.mlb}" ${isVisto?'checked':''} onchange="coletaToggleVisto('${i.mlb}', this.checked)" title="Marcado = ja enviei pro Full" style="width:18px;height:18px;cursor:pointer;accent-color:var(--green)"></td>
+        <td style="text-align:center"><input type="checkbox" class="row-visto" data-mlb="${i.mlb}" ${isVisto?'checked':''} onchange="toggleVisto('${i.mlb}', this.checked)" title="Marcado = ja enviei pro Full" style="width:18px;height:18px;cursor:pointer;accent-color:var(--green)"></td>
       </tr>`;
     }).join('');
 
@@ -705,9 +790,7 @@
       <div class="toolbar" style="margin-bottom:12px">
         <button class="btn" onclick="coletaToggleAll(true)" style="font-size:0.75rem">✓ Selecionar todos</button>
         <button class="btn" onclick="coletaToggleAll(false)" style="font-size:0.75rem">✗ Limpar</button>
-        <button class="btn" onclick="coletaToggleOcultarVistos()" style="font-size:0.75rem;background:${coletaOcultarVistos?'rgba(63,185,80,.15)':'transparent'};border-color:${coletaOcultarVistos?'rgba(63,185,80,.4)':'var(--border2)'};color:${coletaOcultarVistos?'var(--green)':'var(--text)'};font-weight:600" title="Mostrar/ocultar produtos ja marcados como Visto">
-          ${coletaOcultarVistos ? '👁️‍🗨️ Ocultando vistos' : '👁️ Mostrando vistos'} (${Object.keys(coletaVistos).length})
-        </button>
+        ${renderBotaoOcultarVistos()}
         <button class="btn" id="btn-coleta-ml" onclick="carregarEstoqueML('coleta')" style="background:rgba(88,166,255,.15);border-color:rgba(88,166,255,.4);color:var(--blue);font-weight:600">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c2.5 0 4-4 4-9s-1.5-9-4-9m0 18c-2.5 0-4-4-4-9s1.5-9 4-9"/></svg>
           Carregar Estoque ML
@@ -868,12 +951,11 @@
     if (estoqueFiltro === 'critico') itens = itens.filter(r => parseNum(r[iDias]) <= 7);
     if (estoqueFiltro === 'alerta')  itens = itens.filter(r => { const d=parseNum(r[iDias]); return d>7&&d<=20; });
     if (estoqueFiltro === 'ok')      itens = itens.filter(r => parseNum(r[iDias]) > 20);
-    // Filtro: oculta itens em trânsito
-    if (filtroEmTransito) {
+    // Filtro Visto: oculta MLBs já marcados como vistos pelo usuário
+    if (ocultarVistos) {
       itens = itens.filter(r => {
-        const cam = parseNum(iCam>=0 ? r[iCam] : 0) || 0;
-        const ent = parseNum(iEnt>=0 ? r[iEnt] : 0) || 0;
-        return !(cam > 0 || ent > 0);
+        const mlb = iMlb >= 0 ? String(r[iMlb] || '').trim() : '';
+        return !vistos[mlb];
       });
     }
 
@@ -900,23 +982,23 @@
       const dispN = parseNum(disp) || 0;
       const vendN = parseNum(vend) || 0;
 
-      const tinyEstoque = tinyStockMap[mlb];
-      const tinyCell = tinyEstoque === undefined
+      const ml = mlStockMap[mlb];
+      const mlCell = ml === undefined
         ? '<span class="cell-muted">–</span>'
-        : tinyEstoque === null
-          ? '<span class="cell-muted" title="Não encontrado no Tiny">?</span>'
-          : `<span style="color:var(--white);font-weight:600">${fmt(tinyEstoque)}</span>`;
-      return `<tr>
+        : `<span style="color:var(--white);font-weight:600">${fmt(ml.disponivel)}</span>`;
+      const isVisto = !!vistos[mlb];
+      const trStyle = isVisto ? 'opacity:0.5;background:rgba(63,185,80,.04)' : '';
+      return `<tr style="${trStyle}">
         <td style="text-align:center"><input type="checkbox" class="estoque-row-check" data-mlb="${mlb}" data-sku="${sku}" data-vend="${vendN}" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></td>
         <td><div class="cell-produto tip" data-tip="${prod}">${prod}</div></td>
-        <td class="cell-num">${tinyCell}</td>
-        <td class="cell-mono">${!sku||sku==='N/A'?'<span class="cell-muted">–</span>':sku}</td>
+        <td class="cell-num">${mlCell}</td>
         ${iMlb>=0?`<td class="cell-mono">${mlb}</td>`:''}
         <td><input type="number" class="estoque-row-qty" data-mlb="${mlb}" min="0" placeholder="0" style="width:70px;background:var(--bg2);border:1px solid var(--border2);color:var(--text);padding:4px 8px;border-radius:6px;font-size:0.8rem;text-align:right;outline:none"></td>
         ${iDisp>=0?`<td class="cell-num">${fmt(disp)}</td>`:''}
         ${iVend>=0?`<td class="cell-num">${fmt(vendN)}</td>`:''}
         ${iVend>=0&&iDisp>=0?`<td style="min-width:130px">${miniBar(dispN, vendN, '')}</td>`:''}
         ${iDias>=0?`<td>${diasBadge(dias)}</td>`:''}
+        <td style="text-align:center"><input type="checkbox" class="row-visto" data-mlb="${mlb}" ${isVisto?'checked':''} onchange="toggleVisto('${mlb}', this.checked)" title="Marcado = ja enviei pro Full" style="width:18px;height:18px;cursor:pointer;accent-color:var(--green)"></td>
       </tr>`;
     }).join('');
 
@@ -950,10 +1032,10 @@
       <div class="toolbar" style="margin-bottom:12px">
         <button class="btn" onclick="estoqueToggleAll(true)" style="font-size:0.75rem">✓ Selecionar todos</button>
         <button class="btn" onclick="estoqueToggleAll(false)" style="font-size:0.75rem">✗ Limpar</button>
-        ${renderToggleEmTransito()}
-        <button class="btn" id="btn-estoque-tiny" onclick="carregarEstoqueTiny('estoque')" style="background:rgba(240,136,62,.15);border-color:rgba(240,136,62,.4);color:var(--orange);font-weight:600">
+        ${renderBotaoOcultarVistos()}
+        <button class="btn" id="btn-estoque-ml" onclick="carregarEstoqueML('estoque')" style="background:rgba(88,166,255,.15);border-color:rgba(88,166,255,.4);color:var(--blue);font-weight:600">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c2.5 0 4-4 4-9s-1.5-9-4-9m0 18c-2.5 0-4-4-4-9s1.5-9 4-9"/></svg>
-          Carregar Estoque Tiny
+          Carregar Estoque ML
         </button>
         <button class="btn" id="btn-estoque-slack" onclick="enviarSlackGenerico('estoque')" style="background:rgba(63,185,80,.15);border-color:rgba(63,185,80,.4);color:var(--green);font-weight:600">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg>
@@ -967,14 +1049,14 @@
           <thead><tr>
             <th style="text-align:center;width:40px"><input type="checkbox" id="estoque-check-all" onchange="estoqueToggleAll(this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></th>
             <th>Produto</th>
-            <th style="text-align:right">Estoque Tiny</th>
-            <th>SKU</th>
+            <th style="text-align:right">Estoque ML</th>
             ${iMlb>=0?'<th>MLB</th>':''}
             <th style="width:90px">Qtd Enviar</th>
             ${iDisp>=0?'<th style="text-align:right">Disponível</th>':''}
             ${iVend>=0?'<th style="text-align:right">Vendas 30d</th>':''}
             ${iVend>=0&&iDisp>=0?'<th style="min-width:130px">Cobertura</th>':''}
             ${iDias>=0?'<th>Dias</th>':''}
+            <th style="text-align:center;width:60px" title="Marque para indicar 'ja enviei pro Full'">Visto</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
@@ -995,14 +1077,16 @@
   let mlStockMap = {};
 
   async function carregarEstoqueML(tipo = 'coleta') {
-    const sel = '.coleta-row-check';
-    const btn = document.getElementById('btn-coleta-ml');
+    const sel = tipo === 'coleta' ? '.coleta-row-check'
+              : tipo === 'semfull' ? '.semfull-row-check'
+              : '.estoque-row-check';
+    const btnId = tipo === 'coleta' ? 'btn-coleta-ml'
+                : tipo === 'semfull' ? 'btn-semfull-ml'
+                : 'btn-estoque-ml';
+    const btn = document.getElementById(btnId);
     const checkboxes = document.querySelectorAll(sel);
     const mlbs = [...new Set(Array.from(checkboxes).map(cb => cb.dataset.mlb).filter(Boolean))];
-    if (mlbs.length === 0) {
-      alert('Nenhum MLB pra buscar no ML.');
-      return;
-    }
+    if (mlbs.length === 0) { alert('Nenhum MLB pra buscar no ML.'); return; }
     btn.disabled = true;
     btn.innerHTML = `<div class="spinner" style="width:13px;height:13px;border-width:2px"></div> Buscando ${mlbs.length} MLBs…`;
     try {
@@ -1014,7 +1098,9 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erro desconhecido');
       Object.assign(mlStockMap, data.estoques);
-      renderColeta();
+      if (tipo === 'coleta') renderColeta();
+      else if (tipo === 'semfull') renderSemFull();
+      else renderEstoque();
     } catch (e) {
       alert('Erro ao buscar estoque ML: ' + e.message);
     } finally {
@@ -1122,8 +1208,11 @@
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erro desconhecido');
-      status.textContent = `✓ ${data.count} item(ns) enviado(s) ao Slack`;
+      status.textContent = `✓ ${data.count} item(ns) enviado(s) ao Slack · marcados como Visto`;
       status.style.color = 'var(--green)';
+      // Marca os MLBs selecionados como "Visto" (persistência manual)
+      const mlbsMarcar = Array.from(checkboxes).map(cb => cb.dataset.mlb).filter(Boolean);
+      marcarVistosBatch(mlbsMarcar);
       // Limpa checkboxes e quantidades após envio bem-sucedido
       document.querySelectorAll(sel).forEach(cb => cb.checked = false);
       document.querySelectorAll(qtySel).forEach(inp => inp.value = '');
@@ -1247,12 +1336,11 @@
     } else if (semfullFiltro === 'sem_vendas') {
       itens = itens.filter(r => (parseNum(r[iVend]) || 0) === 0);
     }
-    // Filtro: oculta itens em trânsito (cruza pelo MLB ou SKU)
-    if (filtroEmTransito) {
+    // Filtro Visto: oculta MLBs já marcados como vistos pelo usuário
+    if (ocultarVistos) {
       itens = itens.filter(r => {
         const mlb = iMlb >= 0 ? String(r[iMlb] || '').trim() : '';
-        const sku = iSku >= 0 ? String(r[iSku] || '').trim() : '';
-        return !isEmTransito(mlb, sku);
+        return !vistos[mlb];
       });
     }
 
@@ -1272,22 +1360,22 @@
       const vend = iVend >= 0 ? r[iVend] : '';
       const vendN = parseNum(vend) || 0;
 
-      const tinyEstoque = tinyStockMap[mlb];
-      const tinyCell = tinyEstoque === undefined
+      const ml = mlStockMap[mlb];
+      const mlCell = ml === undefined
         ? '<span class="cell-muted">–</span>'
-        : tinyEstoque === null
-          ? '<span class="cell-muted" title="Não encontrado no Tiny">?</span>'
-          : `<span style="color:var(--white);font-weight:600">${fmt(tinyEstoque)}</span>`;
+        : `<span style="color:var(--white);font-weight:600">${fmt(ml.disponivel)}</span>`;
+      const isVisto = !!vistos[mlb];
+      const trStyle = isVisto ? 'opacity:0.5;background:rgba(63,185,80,.04)' : '';
 
-      return `<tr>
+      return `<tr style="${trStyle}">
         <td style="text-align:center"><input type="checkbox" class="semfull-row-check" data-mlb="${mlb}" data-sku="${sku}" data-vend="${vendN}" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></td>
         <td><div class="cell-produto tip" data-tip="${prod}">${prod}</div></td>
-        <td class="cell-num">${tinyCell}</td>
-        <td class="cell-mono">${!sku||sku==='N/A'?'<span class="cell-muted">–</span>':sku}</td>
+        <td class="cell-num">${mlCell}</td>
         <td class="cell-mono">${mlb}</td>
         <td><input type="number" class="semfull-row-qty" data-mlb="${mlb}" min="0" placeholder="0" style="width:70px;background:var(--bg2);border:1px solid var(--border2);color:var(--text);padding:4px 8px;border-radius:6px;font-size:0.8rem;text-align:right;outline:none"></td>
         <td class="cell-num">${fmt(disp)}</td>
         <td class="cell-num">${fmt(vendN)}</td>
+        <td style="text-align:center"><input type="checkbox" class="row-visto" data-mlb="${mlb}" ${isVisto?'checked':''} onchange="toggleVisto('${mlb}', this.checked)" title="Marcado = ja enviei pro Full" style="width:18px;height:18px;cursor:pointer;accent-color:var(--green)"></td>
       </tr>`;
     }).join('');
 
@@ -1324,10 +1412,10 @@
       <div class="toolbar" style="margin-bottom:12px">
         <button class="btn" onclick="semfullToggleAll(true)" style="font-size:0.75rem">✓ Selecionar todos</button>
         <button class="btn" onclick="semfullToggleAll(false)" style="font-size:0.75rem">✗ Limpar</button>
-        ${renderToggleEmTransito()}
-        <button class="btn" id="btn-semfull-tiny" onclick="carregarEstoqueTiny('semfull')" style="background:rgba(240,136,62,.15);border-color:rgba(240,136,62,.4);color:var(--orange);font-weight:600">
+        ${renderBotaoOcultarVistos()}
+        <button class="btn" id="btn-semfull-ml" onclick="carregarEstoqueML('semfull')" style="background:rgba(88,166,255,.15);border-color:rgba(88,166,255,.4);color:var(--blue);font-weight:600">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c2.5 0 4-4 4-9s-1.5-9-4-9m0 18c-2.5 0-4-4-4-9s1.5-9 4-9"/></svg>
-          Carregar Estoque Tiny
+          Carregar Estoque ML
         </button>
         <button class="btn" id="btn-semfull-slack" onclick="enviarSlackGenerico('semfull')" style="background:rgba(63,185,80,.15);border-color:rgba(63,185,80,.4);color:var(--green);font-weight:600">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg>
@@ -1341,12 +1429,12 @@
           <thead><tr>
             <th style="text-align:center;width:40px"><input type="checkbox" id="semfull-check-all" onchange="semfullToggleAll(this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></th>
             <th>Produto</th>
-            <th style="text-align:right">Estoque Tiny</th>
-            <th>SKU</th>
+            <th style="text-align:right">Estoque ML</th>
             <th>MLB</th>
             <th style="width:90px">Qtd Enviar</th>
             <th style="text-align:right">Disp. ML</th>
             <th style="text-align:right">Vendas 30d</th>
+            <th style="text-align:center;width:60px" title="Marque para indicar 'ja enviei pro Full'">Visto</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
