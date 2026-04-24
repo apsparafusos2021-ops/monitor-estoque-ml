@@ -1022,16 +1022,20 @@
   // ── Atalho Enter: envia pro Slack na aba ativa ───────────────────────────
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
-    // Não dispara se usuário está digitando em textarea/select
     const tag = (e.target.tagName || '').toUpperCase();
     if (tag === 'TEXTAREA' || tag === 'SELECT') return;
-    // Inputs: só bloqueia os de texto (text, number, search…). Checkbox/radio/button podem enviar.
     if (tag === 'INPUT') {
-      const tipoTexto = ['text', 'number', 'search', 'email', 'tel', 'url', 'password'];
-      if (tipoTexto.includes((e.target.type || '').toLowerCase())) return;
+      // Permite Enter nos campos "Qtd Enviar" (envio direto sem precisar tirar foco)
+      const cls = String(e.target.className || '');
+      const isQty = /-row-qty\b/.test(cls);
+      if (!isQty) {
+        const tipoTexto = ['text', 'number', 'search', 'email', 'tel', 'url', 'password'];
+        if (tipoTexto.includes((e.target.type || '').toLowerCase())) return;
+      }
     }
     const ativa = document.querySelector('.tab-content.active');
     if (!ativa) return;
+    e.preventDefault();
     if (ativa.id === 'tab-coleta') enviarSlackGenerico('coleta');
     else if (ativa.id === 'tab-estoque') enviarSlackGenerico('estoque');
     else if (ativa.id === 'tab-semfull') enviarSlackGenerico('semfull');
