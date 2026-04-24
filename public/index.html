@@ -727,10 +727,34 @@
   let estoqueData = [], estoquePage = 1, estoqueBusca = '', estoqueFiltro = 'todos';
 
   // ── Filtro global "em trânsito" (à caminho ou entrada pendente) ──────────
-  // Set populado após carregar Alertas Estoque, contém MLBs+SKUs em trânsito
+  // Set populado lendo a aba 'Em Transito' do Google Sheets (gerada pelo monitor.js)
   let emTransitoMLBs = new Set();
   let emTransitoSKUs = new Set();
   let filtroEmTransito = (localStorage.getItem('filtroEmTransito') ?? '1') === '1';
+
+  async function loadEmTransito() {
+    try {
+      const { cols, rows } = await fetchSheet('Em Transito');
+      if (!rows || !rows.length) return;
+      const iSku = cols.findIndex(c => /^sku/i.test(c));
+      const iMlb = cols.findIndex(c => /^mlb/i.test(c));
+      emTransitoMLBs = new Set();
+      emTransitoSKUs = new Set();
+      for (const row of rows) {
+        const mlb = iMlb >= 0 ? String(row[iMlb] || '').trim() : '';
+        const sku = iSku >= 0 ? String(row[iSku] || '').trim() : '';
+        if (mlb) emTransitoMLBs.add(mlb);
+        if (sku && sku !== 'N/A') emTransitoSKUs.add(sku);
+      }
+      console.log(`[EM TRANSITO] ${emTransitoMLBs.size} MLBs, ${emTransitoSKUs.size} SKUs`);
+      // Re-renderiza abas que dependem do Set
+      if (typeof coletaData !== 'undefined' && coletaData.length) renderColeta();
+      if (typeof estoqueData !== 'undefined' && estoqueData.length) renderEstoque();
+      if (typeof semfullData !== 'undefined' && semfullData.length) renderSemFull();
+    } catch (e) {
+      console.warn('[EM TRANSITO] aba não encontrada ou vazia:', e.message);
+    }
+  }
 
   function isEmTransito(mlb, sku) {
     if (mlb && emTransitoMLBs.has(String(mlb).trim())) return true;
@@ -797,23 +821,6 @@
 
       estoqueData = uniqueRows.sort((a,b) => (parseNum(a[iDias])||999) - (parseNum(b[iDias])||999));
       estoquePage = 1;
-
-      // Popula Set de itens "em trânsito" (à caminho > 0 ou entrada pendente > 0)
-      emTransitoMLBs = new Set();
-      emTransitoSKUs = new Set();
-      for (const row of uniqueRows) {
-        const cam = parseNum(iCam >= 0 ? row[iCam] : 0) || 0;
-        const ent = parseNum(iEnt >= 0 ? row[iEnt] : 0) || 0;
-        if (cam > 0 || ent > 0) {
-          const mlb = iMlb >= 0 ? String(row[iMlb] || '').trim() : '';
-          const sku = iSku >= 0 ? String(row[iSku] || '').trim() : '';
-          if (mlb) emTransitoMLBs.add(mlb);
-          if (sku && sku !== 'N/A') emTransitoSKUs.add(sku);
-        }
-      }
-      // Re-renderiza outras abas que dependem do Set
-      if (typeof coletaData !== 'undefined' && coletaData.length) renderColeta();
-      if (typeof semfullData !== 'undefined' && semfullData.length) renderSemFull();
 
       document.getElementById('badge-estoque').textContent = uniqueRows.length;
       renderEstoque(cols, { iSku, iMlb, iProd, iDisp, iCam, iEnt, iVend, iPct, iDias });
@@ -1110,7 +1117,7 @@
     const btn = document.getElementById('btn-refresh');
     btn.disabled = true;
     btn.innerHTML = `<div class="spinner" style="width:13px;height:13px;border-width:2px"></div> Atualizando…`;
-    await Promise.all([loadColeta(true), loadEstoque(true), loadSemFull(true)]);
+    await Promise.all([loadColeta(true), loadEstoque(true), loadSemFull(true), loadEmTransito()]);
     document.getElementById('last-refresh').textContent = 'Última atualização: ' + agora();
     btn.disabled = false;
     btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg> Atualizar`;
@@ -1539,7 +1546,7 @@
 
   // ── Init ──────────────────────────────────────────────────────────────────
   (async () => {
-    await Promise.all([loadColeta(), loadEstoque(), loadSemFull()]);
+    await Promise.all([loadColeta(), loadEstoque(), loadSemFull(), loadEmTransito()]);
     document.getElementById('last-refresh').textContent = 'Última atualização: ' + agora();
   })();
 </script>
