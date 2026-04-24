@@ -586,8 +586,15 @@
     }
     if (coletaFiltro === 'ff') itens = itens.filter(i => i.log.includes('fulfillment'));
     if (coletaFiltro === 'cd') itens = itens.filter(i => !i.log.includes('fulfillment'));
-    // Filtro: oculta itens em trânsito
-    if (filtroEmTransito) itens = itens.filter(i => !isEmTransito(i.mlb, i.sku));
+    // Filtro em-trânsito: usa dados do mlStockMap (carregado sob demanda via botão)
+    // Oculta MLB cujo mlStockMap tenha aCaminho>0 OU entradaPendente>0
+    if (filtroEmTransito) {
+      itens = itens.filter(i => {
+        const ml = mlStockMap[i.mlb];
+        if (!ml) return true; // sem dados ainda = não filtra
+        return !(ml.aCaminho > 0 || ml.entradaPendente > 0);
+      });
+    }
 
     const totalUn = itens.reduce((s, i) => s + i.qtd, 0);
     const ffUn    = itens.filter(i => i.log.includes('fulfillment')).reduce((s,i) => s+i.qtd, 0);
@@ -622,18 +629,22 @@
       const logBadge = i.log.includes('fulfillment')
         ? `<span class="badge badge-ff">FF</span>`
         : `<span class="badge badge-cd">CD</span>`;
-      const tinyEstoque = tinyStockMap[i.mlb];
-      const tinyCell = tinyEstoque === undefined
-        ? '<span class="cell-muted">–</span>'
-        : tinyEstoque === null
-          ? '<span class="cell-muted" title="Não encontrado no Tiny">?</span>'
-          : `<span style="color:var(--white);font-weight:600">${fmt(tinyEstoque)}</span>`;
+      const ml = mlStockMap[i.mlb];
+      const cell = (v) => v === undefined ? '<span class="cell-muted">–</span>'
+        : `<span style="color:var(--white);font-weight:600">${fmt(v)}</span>`;
+      const caminhoCell = ml && ml.aCaminho > 0
+        ? `<span style="color:var(--yellow);font-weight:700">${fmt(ml.aCaminho)}</span>`
+        : (ml ? '<span class="cell-muted">0</span>' : '<span class="cell-muted">–</span>');
+      const pendenteCell = ml && ml.entradaPendente > 0
+        ? `<span style="color:var(--orange);font-weight:700">${fmt(ml.entradaPendente)}</span>`
+        : (ml ? '<span class="cell-muted">0</span>' : '<span class="cell-muted">–</span>');
       return `<tr>
         <td style="text-align:center"><input type="checkbox" class="coleta-row-check" data-mlb="${i.mlb}" data-sku="${i.sku}" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></td>
         <td><div class="cell-produto tip" data-tip="${i.prod}">${i.prod}</div></td>
-        <td class="cell-num">${tinyCell}</td>
-        <td class="cell-mono">${i.sku === 'N/A' || !i.sku ? '<span class="cell-muted">–</span>' : i.sku}</td>
         <td class="cell-mono">${i.mlb}</td>
+        <td class="cell-num">${cell(ml?.disponivel)}</td>
+        <td class="cell-num">${caminhoCell}</td>
+        <td class="cell-num">${pendenteCell}</td>
         <td><input type="number" class="coleta-row-qty" data-mlb="${i.mlb}" min="0" placeholder="0" style="width:70px;background:var(--bg2);border:1px solid var(--border2);color:var(--text);padding:4px 8px;border-radius:6px;font-size:0.8rem;text-align:right;outline:none"></td>
         <td class="cell-num">${fmt(i.qtd)}</td>
         <td>${logBadge}</td>
@@ -688,9 +699,9 @@
         <button class="btn" onclick="coletaToggleAll(true)" style="font-size:0.75rem">✓ Selecionar todos</button>
         <button class="btn" onclick="coletaToggleAll(false)" style="font-size:0.75rem">✗ Limpar</button>
         ${renderToggleEmTransito()}
-        <button class="btn" id="btn-coleta-tiny" onclick="carregarEstoqueTiny('coleta')" style="background:rgba(240,136,62,.15);border-color:rgba(240,136,62,.4);color:var(--orange);font-weight:600">
+        <button class="btn" id="btn-coleta-ml" onclick="carregarEstoqueML('coleta')" style="background:rgba(88,166,255,.15);border-color:rgba(88,166,255,.4);color:var(--blue);font-weight:600">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c2.5 0 4-4 4-9s-1.5-9-4-9m0 18c-2.5 0-4-4-4-9s1.5-9 4-9"/></svg>
-          Carregar Estoque Tiny
+          Carregar Estoque ML
         </button>
         <button class="btn" id="btn-coleta-slack" onclick="enviarSlackGenerico('coleta')" style="background:rgba(63,185,80,.15);border-color:rgba(63,185,80,.4);color:var(--green);font-weight:600">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg>
@@ -704,9 +715,10 @@
           <thead><tr>
             <th style="text-align:center;width:40px"><input type="checkbox" id="coleta-check-all" onchange="coletaToggleAll(this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--blue)"></th>
             <th>Produto</th>
-            <th style="text-align:right">Estoque Tiny</th>
-            <th>SKU</th>
             <th>MLB</th>
+            <th style="text-align:right">Estoque ML</th>
+            <th style="text-align:right" title="A caminho para o Full">À caminho</th>
+            <th style="text-align:right" title="Entrada pendente no Full">Entrada pend.</th>
             <th style="width:90px">Qtd Enviar</th>
             <th style="text-align:right">Qtd. Total</th>
             <th>Logística</th>
@@ -970,6 +982,38 @@
 
   // ── Mapa de estoque Tiny (sku -> disponivel) ──────────────────────────────
   let tinyStockMap = {};
+  // Mapa de dados ML por MLB (para aba Vendas Coleta CD)
+  // mlb -> { disponivel, aCaminho, entradaPendente, inventoryId }
+  let mlStockMap = {};
+
+  async function carregarEstoqueML(tipo = 'coleta') {
+    const sel = '.coleta-row-check';
+    const btn = document.getElementById('btn-coleta-ml');
+    const checkboxes = document.querySelectorAll(sel);
+    const mlbs = [...new Set(Array.from(checkboxes).map(cb => cb.dataset.mlb).filter(Boolean))];
+    if (mlbs.length === 0) {
+      alert('Nenhum MLB pra buscar no ML.');
+      return;
+    }
+    btn.disabled = true;
+    btn.innerHTML = `<div class="spinner" style="width:13px;height:13px;border-width:2px"></div> Buscando ${mlbs.length} MLBs…`;
+    try {
+      const res = await fetch('/api/ml-stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mlbs }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro desconhecido');
+      Object.assign(mlStockMap, data.estoques);
+      renderColeta();
+    } catch (e) {
+      alert('Erro ao buscar estoque ML: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c2.5 0 4-4 4-9s-1.5-9-4-9m0 18c-2.5 0-4-4-4-9s1.5-9 4-9"/></svg> Carregar Estoque ML';
+    }
+  }
 
   async function carregarEstoqueTiny(tipo) {
     const sel = tipo === 'coleta' ? '.coleta-row-check' : tipo === 'semfull' ? '.semfull-row-check' : '.estoque-row-check';

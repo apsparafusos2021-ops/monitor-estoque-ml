@@ -690,6 +690,73 @@ app.post('/api/generate-zpl', (req, res) => {
   }
 });
 
+// ── Endpoint: busca estoque ML por MLB ───────────────────────────────────────
+// Retorna available_quantity, aCaminho (transfer) e entradaPendente (internalProcess)
+// para cada MLB passado. Usado na aba Vendas Coleta CD.
+app.post('/api/ml-stock', async (req, res) => {
+  try {
+    const { mlbs } = req.body || {};
+    if (!Array.isArray(mlbs) || mlbs.length === 0) {
+      return res.status(400).json({ error: 'Nenhum MLB fornecido' });
+    }
+    console.log(`[ML-STOCK] Buscando estoque ML de ${mlbs.length} MLBs...`);
+    const token = await getToken();
+    if (!token) return res.status(500).json({ error: 'Falha ao autenticar com ML' });
+
+    const resultados = {};
+    const lotes = [];
+    for (let i = 0; i < mlbs.length; i += 20) lotes.push(mlbs.slice(i, i + 20));
+
+    for (const lote of lotes) {
+      const r = await fetchComRetry(
+        `${BASE}/items?ids=${lote.join(',')}&attributes=id,available_quantity,inventory_id`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!r) continue;
+      const d = await r.json();
+      for (const entry of d) {
+        if (entry.code !== 200 || !entry.body) continue;
+        const item = entry.body;
+        resultados[item.id] = {
+          disponivel: Number(item.available_quantity || 0),
+          inventoryId: item.inventory_id || null,
+          aCaminho: 0,
+          entradaPendente: 0,
+        };
+      }
+      await sleep(200);
+    }
+
+    // Para quem tem inventory_id, busca dados de trânsito/pendente
+    const invIds = new Set();
+    for (const r of Object.values(resultados)) {
+      if (r.inventoryId) invIds.add(r.inventoryId);
+    }
+    console.log(`[ML-STOCK] ${invIds.size} inventory_ids para buscar trânsito...`);
+
+    const invData = {};
+    for (const invId of invIds) {
+      await sleep(250);
+      const estoque = await getEstoqueInventario(invId, token);
+      if (estoque) invData[invId] = estoque;
+    }
+
+    for (const mlb of Object.keys(resultados)) {
+      const invId = resultados[mlb].inventoryId;
+      if (invId && invData[invId]) {
+        resultados[mlb].aCaminho = invData[invId].aCaminho || 0;
+        resultados[mlb].entradaPendente = invData[invId].entradaPendente || 0;
+      }
+    }
+
+    console.log(`[ML-STOCK] Concluído. ${Object.keys(resultados).length} itens retornados.`);
+    res.json({ estoques: resultados });
+  } catch (e) {
+    console.error('[ML-STOCK] Erro:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Servidor rodando em http://localhost:${PORT}`);
 });
