@@ -141,6 +141,13 @@
             <label for="qty">Quantidade de etiquetas por bipagem:</label>
             <input id="qty" class="qty-input" type="number" min="1" max="500" value="1" />
           </div>
+          <div class="config-item">
+            <label for="tamanho">Tamanho:</label>
+            <select id="tamanho" class="qty-input" style="width:auto;padding:6px 10px">
+              <option value="4x2.5">4×2,5 cm (2 col.)</option>
+              <option value="8x5">8×5 cm (1 col.)</option>
+            </select>
+          </div>
           <div class="config-item" style="color:var(--text3);font-size:0.78rem">
             Atalhos: <kbd>Esc</kbd> limpar &nbsp; <kbd>F2</kbd> foco no campo
           </div>
@@ -182,6 +189,15 @@
   const workingSection = document.getElementById('working-section');
   const produtosList = document.getElementById('produtos-list');
   const ipSummary = document.getElementById('ip-summary');
+
+  // Restaura tamanho de etiqueta escolhido anteriormente
+  try {
+    const tamanhoSalvo = localStorage.getItem('bipar_tamanho');
+    if (tamanhoSalvo) {
+      const sel = document.getElementById('tamanho');
+      if (sel) sel.value = tamanhoSalvo;
+    }
+  } catch {}
 
   // Tenta restaurar do localStorage
   try {
@@ -320,15 +336,17 @@
       return;
     }
 
-    // Quantidade de etiquetas que o usuário quer imprimir
+    // Quantidade de etiquetas e tamanho escolhido pelo usuário
     const qtdEtiquetas = Math.max(1, parseInt(qtyInput.value) || 1);
-    // Cada bloco ZPL imprime 2 etiquetas (rolo de 2 colunas)
-    // Se for ímpar, arredonda pra cima (sai 1 etiqueta a mais)
-    const linhas = Math.ceil(qtdEtiquetas / 2);
-    const etiquetasReais = linhas * 2;
+    const tamanhoSel = document.getElementById('tamanho').value || '4x2.5';
+    localStorage.setItem('bipar_tamanho', tamanhoSel);
+    // 4x2.5 = 2 colunas (cada bloco = 2 etiquetas) | 8x5 = 1 coluna (cada bloco = 1 etiqueta)
+    const etiquetasPorBloco = (tamanhoSel === '8x5') ? 1 : 2;
+    const linhas = Math.ceil(qtdEtiquetas / etiquetasPorBloco);
+    const etiquetasReais = linhas * etiquetasPorBloco;
 
     // Gera o ZPL no servidor e baixa o .txt automaticamente
-    await baixarZpl(produto, linhas);
+    await baixarZpl(produto, linhas, tamanhoSel);
 
     // Atualiza contador com as etiquetas que efetivamente saem
     bipados[ean] = (bipados[ean] || 0) + etiquetasReais;
@@ -347,7 +365,7 @@
       `<div class="fb-content">
         <div class="fb-icon">${done >= total ? '🎉' : '✓'}</div>
         <div class="fb-title">${escapeHtml(produto.title)}</div>
-        <div class="fb-sub">${qtdEtiquetas} etiqueta${qtdEtiquetas>1?'s':''}${aviso} · ${done}/${total} bipados${restante>0 ? ` · faltam ${restante}` : ' · COMPLETO!'}</div>
+        <div class="fb-sub">${qtdEtiquetas} etiqueta${qtdEtiquetas>1?'s':''} ${tamanhoSel}cm${aviso} · ${done}/${total} bipados${restante>0 ? ` · faltam ${restante}` : ' · COMPLETO!'}</div>
       </div>`
     );
     beep('success');
@@ -364,7 +382,7 @@
   }
 
   // ── Geração do arquivo ZPL (formato ML) e download ───────────────────────
-  async function baixarZpl(produto, linhas) {
+  async function baixarZpl(produto, linhas, tamanho) {
     const r = await fetch('/api/generate-zpl', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -373,6 +391,7 @@
         title: produto.title,
         sku: produto.sku,
         linhas,
+        tamanho,
       }),
     });
     if (!r.ok) {

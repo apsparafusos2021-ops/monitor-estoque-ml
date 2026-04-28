@@ -646,8 +646,8 @@ function encodeZplText(str) {
   return out;
 }
 
-// Gera 1 bloco ZPL com 2 etiquetas lado a lado (igual ML)
-function gerarBlocoZpl(inventoryId, title, sku) {
+// Gera 1 bloco ZPL com 2 etiquetas 4x2.5cm lado a lado (formato padrão ML)
+function gerarBlocoZpl4x25(inventoryId, title, sku) {
   const tituloEnc = encodeZplText(title);
   const skuEnc = encodeZplText(`SKU: ${sku || ''}`);
   return `^XA^CI28
@@ -674,15 +674,35 @@ function gerarBlocoZpl(inventoryId, title, sku) {
 `;
 }
 
+// Gera 1 bloco ZPL com 1 etiqueta 8x5cm (formato grande do ML)
+// 8cm x 5cm a 203dpi = ~640 x ~400 dots
+function gerarBlocoZpl8x5(inventoryId, title, sku) {
+  const tituloEnc = encodeZplText(title);
+  const skuEnc = encodeZplText(`SKU: ${sku || ''}`);
+  return `^XA^CI28
+^LH0,0
+^PW640
+^LL400
+^FO80,30^BY3,,0^BCN,110,N,N^FD${inventoryId}^FS
+^FO210,150^A0N,38,48^FH^FD${inventoryId}^FS
+^FO210,151^A0N,38,48^FH^FD${inventoryId}^FS
+^FO32,210^A0N,36,36^FB580,3,4,L^FH^FD${tituloEnc}^FS
+^FO32,344^A0N,32,32^FH^FD${skuEnc}^FS
+^XZ
+`;
+}
+
 app.post('/api/generate-zpl', (req, res) => {
   try {
-    const { inventoryId, title, sku, linhas } = req.body || {};
+    const { inventoryId, title, sku, linhas, tamanho } = req.body || {};
     if (!inventoryId) return res.status(400).json({ error: 'inventoryId obrigatório' });
     const n = Math.max(1, Math.min(500, parseInt(linhas) || 1));
+    const formato = (tamanho === '8x5') ? '8x5' : '4x2.5';
+    const gerar = formato === '8x5' ? gerarBlocoZpl8x5 : gerarBlocoZpl4x25;
     let zpl = '';
-    for (let i = 0; i < n; i++) zpl += gerarBlocoZpl(inventoryId, title || '', sku || '');
+    for (let i = 0; i < n; i++) zpl += gerar(inventoryId, title || '', sku || '');
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="Etiquetas-${inventoryId}.zpl"`);
+    res.setHeader('Content-Disposition', `attachment; filename="Etiquetas-${inventoryId}-${formato}.zpl"`);
     res.send(zpl);
   } catch (e) {
     console.error('[ZPL] Erro:', e.message);
