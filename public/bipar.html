@@ -138,7 +138,7 @@
 
         <div class="config-row">
           <div class="config-item">
-            <label for="qty">Linhas por bipagem (1 linha = 2 etiquetas):</label>
+            <label for="qty">Quantidade de etiquetas por bipagem:</label>
             <input id="qty" class="qty-input" type="number" min="1" max="500" value="1" />
           </div>
           <div class="config-item" style="color:var(--text3);font-size:0.78rem">
@@ -320,27 +320,34 @@
       return;
     }
 
-    const linhas = Math.max(1, parseInt(qtyInput.value) || 1);
-    const etiquetas = linhas * 2;
+    // Quantidade de etiquetas que o usuário quer imprimir
+    const qtdEtiquetas = Math.max(1, parseInt(qtyInput.value) || 1);
+    // Cada bloco ZPL imprime 2 etiquetas (rolo de 2 colunas)
+    // Se for ímpar, arredonda pra cima (sai 1 etiqueta a mais)
+    const linhas = Math.ceil(qtdEtiquetas / 2);
+    const etiquetasReais = linhas * 2;
 
     // Gera o ZPL no servidor e baixa o .txt automaticamente
     await baixarZpl(produto, linhas);
 
-    // Atualiza contador (etiquetas individuais)
-    bipados[ean] = (bipados[ean] || 0) + etiquetas;
+    // Atualiza contador com as etiquetas que efetivamente saem
+    bipados[ean] = (bipados[ean] || 0) + etiquetasReais;
     localStorage.setItem('inbound_bipados', JSON.stringify(bipados));
     renderProdutos();
 
     const done = bipados[ean];
     const total = produto.unidades || 0;
     const restante = Math.max(0, total - done);
+    const aviso = etiquetasReais !== qtdEtiquetas
+      ? ` (rolo 2 col., saem ${etiquetasReais})`
+      : '';
 
     scanInput.className = 'scan-input success';
     mostrarFeedback('success',
       `<div class="fb-content">
         <div class="fb-icon">${done >= total ? '🎉' : '✓'}</div>
         <div class="fb-title">${escapeHtml(produto.title)}</div>
-        <div class="fb-sub">${linhas} linha${linhas>1?'s':''} (${etiquetas} etiquetas) · ${done}/${total} bipados${restante>0 ? ` · faltam ${restante}` : ' · COMPLETO!'}</div>
+        <div class="fb-sub">${qtdEtiquetas} etiqueta${qtdEtiquetas>1?'s':''}${aviso} · ${done}/${total} bipados${restante>0 ? ` · faltam ${restante}` : ' · COMPLETO!'}</div>
       </div>`
     );
     beep('success');
