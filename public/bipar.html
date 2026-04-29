@@ -133,8 +133,8 @@
   <div id="working-section" style="display:none">
     <div class="grid">
       <div class="scan-area">
-        <div class="scan-label">Bipa o EAN do produto</div>
-        <input id="scan" class="scan-input" type="text" placeholder="Bipe ou digite o EAN e pressione Enter…" autocomplete="off" />
+        <div class="scan-label">Bipa o EAN ou o código ML do produto</div>
+        <input id="scan" class="scan-input" type="text" placeholder="Bipe o EAN ou o código ML e pressione Enter…" autocomplete="off" />
 
         <div class="config-row">
           <div class="config-item">
@@ -254,7 +254,7 @@
   function mostrarTrabalho() {
     uploadSection.style.display = 'none';
     workingSection.style.display = 'block';
-    headerSub.textContent = 'Bipa o EAN do produto e a etiqueta sai automaticamente';
+    headerSub.textContent = 'Bipa o EAN ou o código ML do produto e a etiqueta sai automaticamente';
     badgeInbound.style.display = 'inline-block';
     badgeInbound.textContent = `Inbound #${inbound.inboundId} · ${inbound.produtos.length} produto${inbound.produtos.length>1?'s':''} · ${inbound.totalUnidades} un`;
     btnFechar.style.display = 'inline-flex';
@@ -305,9 +305,9 @@
   scanInput.addEventListener('keydown', async (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      const ean = scanInput.value.trim();
-      if (!ean) return;
-      await processarEAN(ean);
+      const codigo = scanInput.value.trim();
+      if (!codigo) return;
+      await processarEAN(codigo);
     } else if (e.key === 'Escape') {
       scanInput.value = '';
       scanInput.className = 'scan-input';
@@ -323,18 +323,25 @@
     }
   });
 
-  async function processarEAN(ean) {
+  async function processarEAN(codigo) {
     scanInput.className = 'scan-input';
 
-    // Procura no inbound atual
-    const produto = inbound.produtos.find(p => p.ean === ean);
+    // Procura no inbound atual: aceita EAN, código ML (inventoryId) ou SKU
+    const codigoNorm = String(codigo).trim().toUpperCase();
+    const produto = inbound.produtos.find(p =>
+      p.ean === codigo ||
+      String(p.inventoryId || '').toUpperCase() === codigoNorm ||
+      String(p.sku || '').toUpperCase() === codigoNorm
+    );
     if (!produto) {
       scanInput.className = 'scan-input error';
-      mostrarFeedback('error', `<div class="fb-icon">❌</div><div class="fb-title fb-error">EAN não está neste inbound</div><div class="fb-sub">EAN bipado: ${ean}</div>`);
+      mostrarFeedback('error', `<div class="fb-icon">❌</div><div class="fb-title fb-error">Código não está neste inbound</div><div class="fb-sub">Bipado: ${escapeHtml(codigo)}</div>`);
       beep('error');
       setTimeout(() => { scanInput.value = ''; scanInput.focus(); }, 800);
       return;
     }
+    // A partir daqui, sempre usamos o EAN do produto como chave do contador
+    const ean = produto.ean;
 
     // Quantidade de etiquetas e tamanho escolhido pelo usuário
     const qtdEtiquetas = Math.max(1, parseInt(qtyInput.value) || 1);
