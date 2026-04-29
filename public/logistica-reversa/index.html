@@ -129,6 +129,10 @@
       <select id="filtro-ano" class="select" onchange="processar()">
         <option value="todos">Todos</option>
       </select>
+      <label>Canal:</label>
+      <select id="filtro-canal" class="select" onchange="processar()">
+        <option value="todos">Todos</option>
+      </select>
     </div>
     <span class="ts-badge" id="ts-badge">—</span>
     <button class="btn btn-primary" id="btn-refresh" onclick="carregar()">
@@ -405,10 +409,12 @@
   function popularFiltros() {
     const anos = new Set();
     const meses = new Set();
+    const canais = new Set();
     for (const row of dadosCache) {
       const d = parseData(row[DATA_COL]);
-      if (!d) continue;
-      anos.add(d.ano); meses.add(d.mes);
+      if (d) { anos.add(d.ano); meses.add(d.mes); }
+      const c = (row[ORIGEM_COL] || '').trim();
+      if (c) canais.add(c);
     }
     const anosOrd = [...anos].sort((a, b) => b - a);
     const selAno = document.getElementById('filtro-ano');
@@ -423,6 +429,13 @@
     selMes.innerHTML = '<option value="todos">Todos</option>' +
       mesesOrd.map(m => `<option value="${m}">${NOMES_MESES[m]}</option>`).join('');
     if (mesesOrd.includes(parseInt(mesAtual))) selMes.value = mesAtual;
+
+    const canaisOrd = [...canais].sort();
+    const selCanal = document.getElementById('filtro-canal');
+    const canalAtual = selCanal.value;
+    selCanal.innerHTML = '<option value="todos">Todos</option>' +
+      canaisOrd.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    if (canaisOrd.includes(canalAtual)) selCanal.value = canalAtual;
   }
 
   function processar() {
@@ -430,14 +443,17 @@
 
     const filtroAno = document.getElementById('filtro-ano').value;
     const filtroMes = document.getElementById('filtro-mes').value;
+    const filtroCanal = document.getElementById('filtro-canal').value;
     const fAno = filtroAno === 'todos' ? null : parseInt(filtroAno);
     const fMes = filtroMes === 'todos' ? null : parseInt(filtroMes);
+    const fCanal = filtroCanal === 'todos' ? null : filtroCanal;
 
     const filtradas = dadosCache.filter(row => {
       const d = parseData(row[DATA_COL]);
       if (!d) return false;
       if (fAno !== null && d.ano !== fAno) return false;
       if (fMes !== null && d.mes !== fMes) return false;
+      if (fCanal !== null && (row[ORIGEM_COL] || '').trim() !== fCanal) return false;
       return true;
     });
 
@@ -488,7 +504,7 @@
     filtradasCache = filtradas;
     labelsCache = labels; dataCache2 = data; coresCache = colors;
 
-    renderCards(vendasUnicas.size, totalProdutos, clientesUnicos.size, labels.length, fAno, fMes);
+    renderCards(vendasUnicas.size, totalProdutos, clientesUnicos.size, labels.length, fAno, fMes, fCanal);
     renderChart(labels, data, colors);
     renderLegend(labels, data, colors, totalMotivos);
     renderTopProdutos(filtradas, fAno, fMes);
@@ -502,8 +518,8 @@
     return partes.join(' / ');
   }
 
-  function renderCards(vendasUnicas, totalProdutos, clientes, motivos, fAno, fMes) {
-    const periodo = rotuloPeriodo(fAno, fMes);
+  function renderCards(vendasUnicas, totalProdutos, clientes, motivos, fAno, fMes, fCanal) {
+    const periodo = rotuloPeriodo(fAno, fMes) + (fCanal ? ` · ${fCanal}` : '');
     const diff = totalProdutos - vendasUnicas;
     document.getElementById('cards-row').innerHTML = `
       <div class="stat-card" onclick="abrirModalVendas()" title="Clique para ver as vendas">
