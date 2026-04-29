@@ -46,6 +46,22 @@
   .stat-card .value { font-size: 1.85rem; font-weight: 700; color: var(--white); line-height: 1.1; }
   .stat-card .sub-value { font-size: 0.72rem; color: var(--text3); margin-top: 4px; }
 
+  /* Multi-select dropdown (canal) */
+  .multi-select { position: relative; display: inline-block; }
+  .multi-select-btn { background: var(--bg2); color: var(--text); border: 1px solid var(--border2); border-radius: 7px; padding: 7px 28px 7px 12px; font-size: 0.85rem; font-weight: 500; cursor: pointer; outline: none; min-width: 140px; max-width: 240px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; }
+  .multi-select-btn:hover { border-color: #484f58; }
+  .multi-select-btn::after { content: '▾'; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--text3); font-size: 0.75rem; }
+  .multi-select.open .multi-select-btn { border-color: var(--blue); }
+  .multi-select-panel { position: absolute; top: calc(100% + 4px); right: 0; background: var(--bg2); border: 1px solid var(--border2); border-radius: 8px; min-width: 220px; max-height: 320px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,.5); z-index: 50; display: none; padding: 6px 0; }
+  .multi-select.open .multi-select-panel { display: block; }
+  .multi-select-toolbar { display: flex; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+  .multi-select-toolbar button { background: transparent; border: 1px solid var(--border2); color: var(--text2); padding: 3px 8px; border-radius: 5px; font-size: 0.72rem; cursor: pointer; }
+  .multi-select-toolbar button:hover { background: var(--border2); color: var(--white); }
+  .multi-select-option { display: flex; align-items: center; gap: 8px; padding: 6px 12px; cursor: pointer; font-size: 0.85rem; color: var(--text); }
+  .multi-select-option:hover { background: rgba(88,166,255,.08); }
+  .multi-select-option input { cursor: pointer; accent-color: var(--blue); }
+  .multi-select-count { font-size: 0.7rem; color: var(--blue); background: rgba(88,166,255,.15); padding: 1px 8px; border-radius: 10px; font-weight: 600; margin-left: 6px; }
+
   /* Modal */
   .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: none; align-items: center; justify-content: center; z-index: 100; padding: 24px; }
   .modal-backdrop.open { display: flex; }
@@ -130,9 +146,16 @@
         <option value="todos">Todos</option>
       </select>
       <label>Canal:</label>
-      <select id="filtro-canal" class="select" onchange="processar()">
-        <option value="todos">Todos</option>
-      </select>
+      <div class="multi-select" id="filtro-canal-wrap">
+        <button type="button" class="multi-select-btn" id="filtro-canal-btn" onclick="toggleCanalDropdown(event)">Todos</button>
+        <div class="multi-select-panel" id="filtro-canal-panel">
+          <div class="multi-select-toolbar">
+            <button type="button" onclick="canalSelectAll(true)">Todos</button>
+            <button type="button" onclick="canalSelectAll(false)">Limpar</button>
+          </div>
+          <div id="filtro-canal-options"></div>
+        </div>
+      </div>
     </div>
     <span class="ts-badge" id="ts-badge">—</span>
     <button class="btn btn-primary" id="btn-refresh" onclick="carregar()">
@@ -433,11 +456,60 @@
     if (mesesOrd.includes(parseInt(mesAtual))) selMes.value = mesAtual;
 
     const canaisOrd = [...canais].sort();
-    const selCanal = document.getElementById('filtro-canal');
-    const canalAtual = selCanal.value;
-    selCanal.innerHTML = '<option value="todos">Todos</option>' +
-      canaisOrd.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-    if (canaisOrd.includes(canalAtual)) selCanal.value = canalAtual;
+    const opts = document.getElementById('filtro-canal-options');
+    // Preserva seleção atual (se houver) antes de re-renderizar
+    const selecionadosAntes = canalSelecionados.size > 0
+      ? new Set([...canalSelecionados].filter(c => canaisOrd.includes(c)))
+      : new Set();
+    opts.innerHTML = canaisOrd.map(c => `
+      <label class="multi-select-option">
+        <input type="checkbox" value="${escapeHtml(c)}" ${selecionadosAntes.has(c) ? 'checked' : ''} onchange="onCanalChange(event)" />
+        <span>${escapeHtml(c)}</span>
+      </label>
+    `).join('');
+    canalSelecionados = selecionadosAntes;
+    atualizarBotaoCanal();
+  }
+
+  // ── Multi-select de canal ─────────────────────────────────────────────────
+  let canalSelecionados = new Set();
+  function toggleCanalDropdown(e) {
+    e.stopPropagation();
+    document.getElementById('filtro-canal-wrap').classList.toggle('open');
+  }
+  document.addEventListener('click', (e) => {
+    const wrap = document.getElementById('filtro-canal-wrap');
+    if (wrap && !wrap.contains(e.target)) wrap.classList.remove('open');
+  });
+  function onCanalChange(e) {
+    const v = e.target.value;
+    if (e.target.checked) canalSelecionados.add(v);
+    else canalSelecionados.delete(v);
+    atualizarBotaoCanal();
+    processar();
+  }
+  function canalSelectAll(marcar) {
+    const checks = document.querySelectorAll('#filtro-canal-options input[type=checkbox]');
+    canalSelecionados.clear();
+    checks.forEach(c => {
+      c.checked = marcar;
+      if (marcar) canalSelecionados.add(c.value);
+    });
+    atualizarBotaoCanal();
+    processar();
+  }
+  function atualizarBotaoCanal() {
+    const btn = document.getElementById('filtro-canal-btn');
+    const total = document.querySelectorAll('#filtro-canal-options input[type=checkbox]').length;
+    const sel = canalSelecionados.size;
+    if (sel === 0 || sel === total) {
+      btn.innerHTML = 'Todos';
+    } else if (sel === 1) {
+      btn.innerHTML = escapeHtml([...canalSelecionados][0]);
+    } else {
+      const primeiro = [...canalSelecionados][0];
+      btn.innerHTML = `${escapeHtml(primeiro)} <span class="multi-select-count">+${sel - 1}</span>`;
+    }
   }
 
   function processar() {
@@ -445,17 +517,22 @@
 
     const filtroAno = document.getElementById('filtro-ano').value;
     const filtroMes = document.getElementById('filtro-mes').value;
-    const filtroCanal = document.getElementById('filtro-canal').value;
     const fAno = filtroAno === 'todos' ? null : parseInt(filtroAno);
     const fMes = filtroMes === 'todos' ? null : parseInt(filtroMes);
-    const fCanal = filtroCanal === 'todos' ? null : filtroCanal;
+    // Multi-canal: vazio ou todos marcados = sem filtro
+    const totalCanais = document.querySelectorAll('#filtro-canal-options input[type=checkbox]').length;
+    const usarCanalFiltro = canalSelecionados.size > 0 && canalSelecionados.size < totalCanais;
+    const fCanal = usarCanalFiltro ? canalSelecionados : null; // Set ou null
+    const fCanalLabel = usarCanalFiltro
+      ? (canalSelecionados.size === 1 ? [...canalSelecionados][0] : `${canalSelecionados.size} canais`)
+      : null;
 
     const filtradas = dadosCache.filter(row => {
       const d = parseData(row[DATA_COL]);
       if (!d) return false;
       if (fAno !== null && d.ano !== fAno) return false;
       if (fMes !== null && d.mes !== fMes) return false;
-      if (fCanal !== null && (row[ORIGEM_COL] || '').trim() !== fCanal) return false;
+      if (fCanal && !fCanal.has((row[ORIGEM_COL] || '').trim())) return false;
       return true;
     });
 
@@ -506,7 +583,7 @@
     filtradasCache = filtradas;
     labelsCache = labels; dataCache2 = data; coresCache = colors;
 
-    renderCards(vendasUnicas.size, totalProdutos, clientesUnicos.size, labels.length, fAno, fMes, fCanal);
+    renderCards(vendasUnicas.size, totalProdutos, clientesUnicos.size, labels.length, fAno, fMes, fCanalLabel);
     renderChart(labels, data, colors);
     renderLegend(labels, data, colors, totalMotivos);
     renderTopProdutos(filtradas, fAno, fMes);
