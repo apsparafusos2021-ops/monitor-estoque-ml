@@ -146,7 +146,7 @@
 
   <div class="grid-2">
     <div class="chart-card">
-      <div class="chart-title">📈 Devoluções por origem do problema</div>
+      <div class="chart-title">📈 Devoluções por conferência</div>
       <div class="chart-wrap" id="chart-wrap">
         <canvas id="pieChart"></canvas>
         <div class="loading-overlay" id="loading"><div class="spinner"></div></div>
@@ -223,11 +223,11 @@
   }
 
   // Devolve o "motivo" usado para agregação:
-  //  1º) coluna Análise (Fornecedor/Cliente/Transporte) — preenchida nos registros novos
+  //  1º) coluna P (Conferência) — Defeito / Produto OK / etc.
   //  2º) fallback para a coluna Motivo antiga (já traduzida se vier em inglês)
   function getMotivo(row) {
-    const analise = (row[ANALISE_COL] || '').trim();
-    if (analise) return analise;
+    const conf = (row[CONFER_COL] || '').trim();
+    if (conf) return conf;
     const antigo = (row[MOTIVO_OLD_COL] || '').trim();
     if (antigo) return traduzirMotivo(antigo);
     return '';
