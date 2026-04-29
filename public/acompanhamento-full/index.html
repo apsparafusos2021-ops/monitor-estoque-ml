@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Acompanhamento Full — Envios por mês e canal</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0d1117; --bg2: #161b22; --border: #21262d; --border2: #30363d;
+    --text: #c9d1d9; --text2: #8b949e; --text3: #6e7681; --white: #f0f6fc;
+    --blue: #58a6ff; --orange: #f0883e; --green: #3fb950; --red: #f85149; --yellow: #d29922;
+  }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh; display: flex; flex-direction: column;
+  }
+
+  header {
+    padding: 16px 28px; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 12px; flex-wrap: wrap;
+    background: rgba(13,17,23,.95); backdrop-filter: blur(8px);
+  }
+  .header-left { display: flex; align-items: center; gap: 14px; }
+  .logo {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, #1565C0, #6A1B9A);
+    border-radius: 9px; display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; font-weight: 700; color: #fff;
+  }
+  h1 { font-size: 1.05rem; font-weight: 600; color: var(--white); }
+  .sub { font-size: 0.75rem; color: var(--text3); margin-top: 2px; }
+  .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+  .btn {
+    background: var(--bg2); border: 1px solid var(--border2);
+    color: var(--text); padding: 8px 18px; border-radius: 8px;
+    cursor: pointer; font-size: 0.85rem; transition: all .15s;
+    display: inline-flex; align-items: center; gap: 6px; font-weight: 500;
+  }
+  .btn:hover { background: var(--border2); border-color: #484f58; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-primary {
+    background: rgba(88,166,255,.15); border-color: rgba(88,166,255,.4);
+    color: var(--blue); font-weight: 600;
+  }
+  .btn-primary:hover { background: rgba(88,166,255,.25); }
+
+  .ts-badge {
+    font-size: 0.75rem; color: var(--text3);
+    background: var(--bg2); border: 1px solid var(--border);
+    padding: 4px 12px; border-radius: 6px;
+  }
+
+  .filter-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .filter-row label { font-size: 0.78rem; color: var(--text2); font-weight: 600; margin-right: 4px; }
+  .select {
+    background: var(--bg2); color: var(--text);
+    border: 1px solid var(--border2); border-radius: 7px;
+    padding: 7px 12px; font-size: 0.85rem; font-weight: 500;
+    cursor: pointer; outline: none; min-width: 110px;
+  }
+  .select:hover { border-color: #484f58; }
+  .select:focus { border-color: var(--blue); }
+
+  .checkbox-toggle {
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    font-size: 0.78rem; color: var(--text2); user-select: none;
+    padding: 7px 12px; background: var(--bg2); border: 1px solid var(--border2);
+    border-radius: 7px;
+  }
+  .checkbox-toggle input { cursor: pointer; accent-color: var(--blue); }
+  .checkbox-toggle:hover { color: var(--text); border-color: #484f58; }
+
+  main {
+    flex: 1; padding: 28px; max-width: 1400px; width: 100%; margin: 0 auto;
+    display: flex; flex-direction: column; gap: 24px;
+  }
+
+  .cards-row {
+    display: grid; gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+  .stat-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 14px; padding: 18px 20px;
+  }
+  .stat-card .label {
+    font-size: 0.72rem; color: var(--text2);
+    text-transform: uppercase; letter-spacing: .8px; margin-bottom: 6px;
+    font-weight: 600;
+  }
+  .stat-card .value {
+    font-size: 1.85rem; font-weight: 700; color: var(--white); line-height: 1.1;
+  }
+  .stat-card .sub-value { font-size: 0.72rem; color: var(--text3); margin-top: 4px; }
+
+  .chart-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 14px; padding: 24px;
+  }
+  .chart-title {
+    font-size: 0.78rem; color: var(--text2);
+    text-transform: uppercase; letter-spacing: .8px;
+    margin-bottom: 16px; font-weight: 600;
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  }
+  .chart-wrap { position: relative; min-height: 420px; }
+
+  .grid-2 {
+    display: grid; gap: 24px;
+    grid-template-columns: 1.5fr 1fr;
+  }
+  @media (max-width: 900px) {
+    .grid-2 { grid-template-columns: 1fr; }
+  }
+
+  .table-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 14px; padding: 20px; overflow-x: auto;
+  }
+  table.dash {
+    width: 100%; border-collapse: collapse; font-size: 0.85rem;
+  }
+  table.dash th {
+    text-align: left; padding: 10px 12px; color: var(--text2);
+    text-transform: uppercase; letter-spacing: .6px;
+    font-size: 0.7rem; font-weight: 600;
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; background: var(--bg2);
+  }
+  table.dash th.right, table.dash td.right { text-align: right; }
+  table.dash td {
+    padding: 11px 12px; color: var(--text);
+    border-bottom: 1px solid rgba(33,38,45,.6);
+  }
+  table.dash tr:last-child td { border-bottom: none; }
+  table.dash tr:hover td { background: rgba(33,38,45,.4); }
+  table.dash tfoot td {
+    font-weight: 700; color: var(--white);
+    border-top: 2px solid var(--border2); border-bottom: none;
+    background: rgba(33,38,45,.3);
+  }
+  .canal-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-weight: 600; color: var(--white);
+  }
+  .canal-dot { width: 11px; height: 11px; border-radius: 50%; }
+
+  .loading-overlay {
+    position: absolute; inset: 0; background: rgba(13,17,23,.85);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 10; border-radius: 14px;
+  }
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border2); border-top-color: var(--blue);
+    border-radius: 50%; animation: spin .75s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-msg {
+    color: var(--red); padding: 16px; text-align: center;
+    background: rgba(248,81,73,.08); border: 1px solid rgba(248,81,73,.2);
+    border-radius: 10px; font-size: 0.85rem;
+  }
+  .empty-msg {
+    color: var(--text3); padding: 40px; text-align: center; font-size: 0.9rem;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <div class="logo">📦</div>
+    <div>
+      <h1>Acompanhamento Full — Envios por mês e canal</h1>
+      <div class="sub">Quantidade de envios mensais separados por canal de venda</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="filter-row">
+      <label>Ano:</label>
+      <select id="filtro-ano" class="select" onchange="processar()">
+        <option value="todos">Todos</option>
+      </select>
+      <label>Mês:</label>
+      <select id="filtro-mes" class="select" onchange="processar()">
+        <option value="todos">Todos</option>
+      </select>
+      <label>Canal:</label>
+      <select id="filtro-canal" class="select" onchange="processar()">
+        <option value="todos">Todos</option>
+      </select>
+    </div>
+    <span class="ts-badge" id="ts-badge">—</span>
+    <button class="btn btn-primary" id="btn-refresh" onclick="carregar()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+      </svg>
+      Atualizar
+    </button>
+  </div>
+</header>
+
+<main>
+  <div class="cards-row" id="cards-row"></div>
+
+  <div class="chart-card">
+    <div class="chart-title">
+      <span>📊 Envios por mês × canal</span>
+      <span id="chart-info" style="text-transform:none;letter-spacing:0;color:var(--text3);font-weight:500"></span>
+    </div>
+    <div class="chart-wrap" id="chart-wrap">
+      <canvas id="barChart"></canvas>
+      <div class="loading-overlay" id="loading"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="table-card">
+      <div class="chart-title"><span>📅 Detalhamento mensal</span></div>
+      <div id="tabela-mensal"></div>
+    </div>
+    <div class="table-card">
+      <div class="chart-title"><span>🏷️ Canal × Status</span></div>
+      <div id="tabela-canal"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+  const SHEET_ID = '1zCIozGtWvULmzq_W7wE-6zPXbnVx5dzKzbKJYFtvJwA';
+  const SHEET_NAME = 'acompanhamento full';
+  const CANAL_COL  = 0;  // A
+  const DATA_COL   = 3;  // D - Data do envio
+  const STATUS_COL = 4;  // E - Status
+
+  const NOMES_MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const NOMES_MESES_CURTO = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+  // Paleta para canais (mesma do outro dashboard, Material 700/800)
+  const PALETA_CANAIS = [
+    '#1565C0', // Blue 800
+    '#EF6C00', // Orange 800
+    '#2E7D32', // Green 800
+    '#6A1B9A', // Purple 800
+    '#C62828', // Red 800
+    '#00838F', // Cyan 800
+    '#AD1457', // Pink 800
+    '#F9A825', // Yellow 800
+    '#283593', // Indigo 800
+    '#558B2F', // Light Green 800
+    '#5D4037', // Brown 700
+    '#37474F', // Blue Grey 800
+  ];
+
+  // Cores fixas para canais conhecidos
+  const CORES_CANAL_FIXAS = {
+    'ml':         '#FFE600', // Mercado Livre amarelo
+    'mercadolivre':'#FFE600',
+    'mercado livre':'#FFE600',
+    'shopee':     '#EE4D2D', // Shopee laranja
+    'amazon':     '#FF9900', // Amazon laranja
+    'magalu':     '#0086FF', // Magalu azul
+    'magazine luiza':'#0086FF',
+    'site':       '#2E7D32',
+    'shopify':    '#95BF47',
+  };
+
+  // Paleta para status
+  const PALETA_STATUS = [
+    '#1565C0','#6A1B9A','#00838F','#283593','#AD1457','#EF6C00','#4527A0','#558B2F',
+    '#00695C','#5D4037','#3949AB','#7B1FA2','#0277BD','#C2185B','#827717','#37474F',
+  ];
+
+  // Cores fixas por status (verde=ok, amarelo=andamento, vermelho/laranja=erro)
+  const CORES_STATUS_FIXAS = {
+    'concluida':       '#2E7D32',
+    'concluído':       '#2E7D32',
+    'concluido':       '#2E7D32',
+    'com sucesso':     '#2E7D32',
+    'sucesso':         '#2E7D32',
+    'em andamento':    '#1565C0',
+    'aberto':          '#1565C0',
+    'pendente':        '#F9A825',
+    'erro full':       '#EF6C00',
+    'erro expedicao':  '#C62828',
+    'erro expedição':  '#C62828',
+    'cancelado':       '#6E7681',
+  };
+
+  let dadosCache = [];
+  let chart = null;
+
+  function normalizar(s) {
+    return String(s || '').toLowerCase().trim()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/\s+/g, ' ');
+  }
+
+  function corCanal(canal, fallbackIdx) {
+    const fixa = CORES_CANAL_FIXAS[normalizar(canal)];
+    if (fixa) return fixa;
+    return PALETA_CANAIS[fallbackIdx % PALETA_CANAIS.length];
+  }
+
+  function corStatus(status, fallbackIdx) {
+    const fixa = CORES_STATUS_FIXAS[normalizar(status)];
+    if (fixa) return fixa;
+    return PALETA_STATUS[fallbackIdx % PALETA_STATUS.length];
+  }
+
+  // Aceita "Date(2025,5,3)" (mes 0-idx), "3/6/25", "3-jun-2025", "2025-06-03"
+  const MESES_ABREV = { jan:0, fev:1, mar:2, abr:3, mai:4, jun:5, jul:6, ago:7, set:8, out:9, nov:10, dez:11 };
+  function parseData(valor) {
+    if (!valor) return null;
+    const s = String(valor).trim();
+    let m = s.match(/^Date\((\d+),(\d+),(\d+)/);
+    if (m) return { ano: +m[1], mes: +m[2] };
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (m) {
+      let ano = +m[3]; if (ano < 100) ano += 2000;
+      return { ano, mes: +m[2] - 1 };
+    }
+    m = s.match(/^(\d{1,2})-([a-zA-Zçãéíóúâêô]{3,})-(\d{2,4})$/);
+    if (m) {
+      const mesAb = m[2].toLowerCase().slice(0,3);
+      if (MESES_ABREV[mesAb] != null) {
+        let ano = +m[3]; if (ano < 100) ano += 2000;
+        return { ano, mes: MESES_ABREV[mesAb] };
+      }
+    }
+    m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (m) return { ano: +m[1], mes: +m[2] - 1 };
+    return null;
+  }
+
+  async function fetchSheet() {
+    const baseUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME)}`;
+    try {
+      const res = await fetch(baseUrl);
+      if (res.ok) {
+        const text = await res.text();
+        return parseGvizFromString(text);
+      }
+    } catch {}
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      const timer = setTimeout(() => { cleanup(); reject(new Error('Timeout — verifique conexão e se a planilha está pública')); }, 20000);
+      function cleanup() {
+        clearTimeout(timer);
+        if (script.parentNode) script.remove();
+        try { delete window.google.visualization.Query.setResponse; } catch {}
+      }
+      window.google = window.google || {};
+      window.google.visualization = window.google.visualization || {};
+      window.google.visualization.Query = window.google.visualization.Query || {};
+      window.google.visualization.Query.setResponse = function(json) {
+        cleanup();
+        try {
+          if (json.status === 'error') return reject(new Error(json.errors?.[0]?.message || 'Erro na planilha'));
+          const rows = (json.table.rows || []).map(row =>
+            (row.c || []).map(cell => (cell && cell.v != null) ? String(cell.v) : '')
+          );
+          resolve({ rows });
+        } catch(e) { reject(e); }
+      };
+      script.onerror = () => { cleanup(); reject(new Error('Falha ao conectar com o Google Sheets')); };
+      script.src = baseUrl;
+      document.head.appendChild(script);
+    });
+  }
+
+  function parseGvizFromString(text) {
+    const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
+    if (json.status === 'error') throw new Error(json.errors?.[0]?.message || 'Erro na planilha');
+    const rows = (json.table.rows || []).map(row =>
+      (row.c || []).map(cell => (cell && cell.v != null) ? String(cell.v) : '')
+    );
+    return { rows };
+  }
+
+  async function carregar() {
+    const btn = document.getElementById('btn-refresh');
+    const loading = document.getElementById('loading');
+    btn.disabled = true; loading.style.display = 'flex';
+    try {
+      const { rows } = await fetchSheet();
+      dadosCache = rows;
+      popularFiltros();
+      processar();
+      document.getElementById('ts-badge').textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR');
+    } catch (e) {
+      console.error(e);
+      document.getElementById('chart-wrap').innerHTML =
+        `<div class="error-msg">Erro ao carregar: ${e.message}</div>`;
+    } finally {
+      btn.disabled = false;
+      const l = document.getElementById('loading'); if (l) l.style.display = 'none';
+    }
+  }
+
+  function popularFiltros() {
+    const anos = new Set();
+    const meses = new Set();
+    const canais = new Set();
+    for (const row of dadosCache) {
+      const d = parseData(row[DATA_COL]);
+      if (d) { anos.add(d.ano); meses.add(d.mes); }
+      const c = (row[CANAL_COL] || '').trim();
+      if (c) canais.add(c);
+    }
+
+    const anosOrd = [...anos].sort((a, b) => b - a);
+    const selAno = document.getElementById('filtro-ano');
+    const anoAtual = selAno.value;
+    selAno.innerHTML = '<option value="todos">Todos</option>' +
+      anosOrd.map(a => `<option value="${a}">${a}</option>`).join('');
+    if (anosOrd.includes(parseInt(anoAtual))) selAno.value = anoAtual;
+
+    const mesesOrd = [...meses].sort((a, b) => a - b);
+    const selMes = document.getElementById('filtro-mes');
+    const mesAtual = selMes.value;
+    selMes.innerHTML = '<option value="todos">Todos</option>' +
+      mesesOrd.map(m => `<option value="${m}">${NOMES_MESES[m]}</option>`).join('');
+    if (mesesOrd.includes(parseInt(mesAtual))) selMes.value = mesAtual;
+
+    const canaisOrd = [...canais].sort();
+    const selCanal = document.getElementById('filtro-canal');
+    const canalAtual = selCanal.value;
+    selCanal.innerHTML = '<option value="todos">Todos</option>' +
+      canaisOrd.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    if (canaisOrd.includes(canalAtual)) selCanal.value = canalAtual;
+  }
+
+  function processar() {
+    if (!dadosCache.length) return;
+
+    const filtroAno = document.getElementById('filtro-ano').value;
+    const filtroMes = document.getElementById('filtro-mes').value;
+    const filtroCanal = document.getElementById('filtro-canal').value;
+
+    const fAno = filtroAno === 'todos' ? null : parseInt(filtroAno);
+    const fMes = filtroMes === 'todos' ? null : parseInt(filtroMes);
+    const fCanal = filtroCanal === 'todos' ? null : filtroCanal;
+
+    // Estrutura: porMes[mesKey][canal][status] = count
+    const porMes = {};
+    const porCanal = {};       // canal -> total
+    const porCanalStatus = {}; // canal -> status -> total
+    const porStatus = {};      // status -> total
+    const mesesSet = new Set();
+    const canaisSet = new Set();
+    const statusSet = new Set();
+    let totalEnvios = 0;
+    let semStatus = 0;
+
+    for (const row of dadosCache) {
+      const canal = (row[CANAL_COL] || '').trim();
+      if (!canal) continue;
+      const d = parseData(row[DATA_COL]);
+      if (!d) continue;
+      if (fAno !== null && d.ano !== fAno) continue;
+      if (fMes !== null && d.mes !== fMes) continue;
+      if (fCanal !== null && canal !== fCanal) continue;
+
+      let status = (row[STATUS_COL] || '').trim();
+      if (!status) { status = '(sem status)'; semStatus++; }
+
+      const key = `${d.ano}-${String(d.mes).padStart(2,'0')}`;
+      if (!porMes[key]) porMes[key] = {};
+      if (!porMes[key][canal]) porMes[key][canal] = {};
+      porMes[key][canal][status] = (porMes[key][canal][status] || 0) + 1;
+
+      porCanal[canal] = (porCanal[canal] || 0) + 1;
+      if (!porCanalStatus[canal]) porCanalStatus[canal] = {};
+      porCanalStatus[canal][status] = (porCanalStatus[canal][status] || 0) + 1;
+      porStatus[status] = (porStatus[status] || 0) + 1;
+
+      mesesSet.add(key);
+      canaisSet.add(canal);
+      statusSet.add(status);
+      totalEnvios++;
+    }
+
+    const mesesOrdenados = [...mesesSet].sort();
+    const canaisOrdenados = [...canaisSet].sort((a, b) => (porCanal[b] || 0) - (porCanal[a] || 0));
+    const statusOrdenados = [...statusSet].sort((a, b) => (porStatus[b] || 0) - (porStatus[a] || 0));
+
+    // Cores
+    let fbIdxC = 0;
+    const coresCanal = {};
+    for (const c of canaisOrdenados) {
+      coresCanal[c] = corCanal(c, fbIdxC);
+      if (!CORES_CANAL_FIXAS[normalizar(c)]) fbIdxC++;
+    }
+    let fbIdxS = 0;
+    const coresStatus = {};
+    for (const s of statusOrdenados) {
+      coresStatus[s] = corStatus(s, fbIdxS);
+      if (!CORES_STATUS_FIXAS[normalizar(s)]) fbIdxS++;
+    }
+
+    renderCards(totalEnvios, mesesOrdenados, canaisOrdenados, porMes, porCanal);
+    renderChart(mesesOrdenados, canaisOrdenados, statusOrdenados, porMes, porCanalStatus, coresStatus, fMes);
+    renderTabelaMensal(mesesOrdenados, canaisOrdenados, porMes, coresCanal);
+    renderTabelaCanalStatus(canaisOrdenados, statusOrdenados, porCanalStatus, porCanal, coresCanal, coresStatus, totalEnvios);
+
+    const periodo = fMes !== null
+      ? `${NOMES_MESES[fMes]}${fAno !== null ? '/' + fAno : ''}`
+      : (fAno !== null ? `Ano ${fAno}` : 'Todos os anos');
+    const canalTxt = fCanal !== null ? ` · ${fCanal}` : '';
+    document.getElementById('chart-info').textContent =
+      `${periodo}${canalTxt} · ${mesesOrdenados.length} mês(es) · ${canaisOrdenados.length} canal(is) · ${statusOrdenados.length} status`;
+  }
+
+  function rotuloMes(key) {
+    const [a, m] = key.split('-').map(Number);
+    return `${NOMES_MESES_CURTO[m]}/${String(a).slice(-2)}`;
+  }
+
+  function renderCards(total, meses, canais, porMes, porCanal) {
+    const mediaMensal = meses.length > 0 ? total / meses.length : 0;
+    let melhorCanal = '—', melhorQtd = 0;
+    for (const c of canais) if ((porCanal[c]||0) > melhorQtd) { melhorCanal = c; melhorQtd = porCanal[c]; }
+
+    // "Melhor mês" sempre considera TODA a planilha (ignora filtros)
+    const totalPorMesGeral = {};
+    for (const row of dadosCache) {
+      const canal = (row[CANAL_COL] || '').trim();
+      if (!canal) continue;
+      const d = parseData(row[DATA_COL]);
+      if (!d) continue;
+      const k = `${d.ano}-${String(d.mes).padStart(2,'0')}`;
+      totalPorMesGeral[k] = (totalPorMesGeral[k] || 0) + 1;
+    }
+    let melhorMes = '—', melhorMesQtd = 0;
+    for (const [k, v] of Object.entries(totalPorMesGeral)) {
+      if (v > melhorMesQtd) { melhorMesQtd = v; melhorMes = rotuloMes(k); }
+    }
+
+    document.getElementById('cards-row').innerHTML = `
+      <div class="stat-card">
+        <div class="label">Total de envios</div>
+        <div class="value">${total.toLocaleString('pt-BR')}</div>
+        <div class="sub-value">no período filtrado</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Média mensal</div>
+        <div class="value">${mediaMensal.toLocaleString('pt-BR', {maximumFractionDigits:1})}</div>
+        <div class="sub-value">${meses.length} mês(es) com dados</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Canais ativos</div>
+        <div class="value">${canais.length}</div>
+        <div class="sub-value">${melhorCanal !== '—' ? 'Topo: '+escapeHtml(melhorCanal) : ''}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Melhor mês</div>
+        <div class="value">${escapeHtml(melhorMes)}</div>
+        <div class="sub-value">${melhorMesQtd.toLocaleString('pt-BR')} envios</div>
+      </div>
+    `;
+  }
+
+  function renderChart(meses, canais, statuses, porMes, porCanalStatus, coresStatus, fMes) {
+    if (chart) chart.destroy();
+    const ctx = document.getElementById('barChart').getContext('2d');
+
+    // Quando um mês específico está selecionado:
+    //   X = canais. Cada barra empilhada por status.
+    // Caso contrário:
+    //   X = meses. Para cada mês, uma barra por canal (lado a lado), cada barra empilhada por status.
+    let labels, datasets;
+
+    if (fMes !== null) {
+      labels = canais;
+      datasets = statuses.map(status => ({
+        label: status,
+        data: canais.map(c => (porCanalStatus[c] && porCanalStatus[c][status]) || 0),
+        backgroundColor: coresStatus[status],
+        borderColor: '#0d1117', borderWidth: 1, borderRadius: 3,
+        stack: 'stack0',
+      }));
+    } else {
+      labels = meses.map(rotuloMes);
+      datasets = [];
+      for (const canal of canais) {
+        for (const status of statuses) {
+          datasets.push({
+            label: `${canal} — ${status}`,
+            data: meses.map(k => (porMes[k] && porMes[k][canal] && porMes[k][canal][status]) || 0),
+            backgroundColor: coresStatus[status],
+            borderColor: '#0d1117', borderWidth: 1, borderRadius: 3,
+            stack: canal,                  // cada canal vira uma barra separada
+            canalLabel: canal,             // metadata para tooltip
+            statusLabel: status,
+          });
+        }
+      }
+    }
+
+    chart = new Chart(ctx, {
+      type: 'bar',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 600 },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              color: '#c9d1d9', usePointStyle: true, pointStyle: 'rect', padding: 12,
+              font: { size: 12 },
+              // No modo "todos meses", a legenda repete cores; deduplica por status
+              filter: (item, data) => {
+                if (fMes !== null) return true;
+                const seen = item.__seen || (item.__seen = new Set());
+                const ds = data.datasets[item.datasetIndex];
+                if (!ds.statusLabel) return true;
+                if (seen.has(ds.statusLabel)) return false;
+                seen.add(ds.statusLabel);
+                return true;
+              },
+              generateLabels: (ch) => {
+                if (fMes !== null) {
+                  return ch.data.datasets.map((ds, i) => ({
+                    text: ds.label, fillStyle: ds.backgroundColor, strokeStyle: ds.backgroundColor,
+                    datasetIndex: i, lineWidth: 0,
+                  }));
+                }
+                // Modo todos os meses: legenda única por status
+                const vistos = new Set();
+                const out = [];
+                ch.data.datasets.forEach((ds, i) => {
+                  const key = ds.statusLabel || ds.label;
+                  if (vistos.has(key)) return;
+                  vistos.add(key);
+                  out.push({ text: key, fillStyle: ds.backgroundColor, strokeStyle: ds.backgroundColor, datasetIndex: i, lineWidth: 0 });
+                });
+                return out;
+              },
+            },
+          },
+          tooltip: {
+            backgroundColor: '#161b22', borderColor: '#30363d', borderWidth: 1,
+            titleColor: '#f0f6fc', bodyColor: '#c9d1d9', padding: 12,
+            callbacks: {
+              title: (items) => {
+                if (!items.length) return '';
+                const ds = chart.data.datasets[items[0].datasetIndex];
+                if (fMes !== null) return items[0].label; // canal
+                if (ds.canalLabel) return `${items[0].label} · ${ds.canalLabel}`;
+                return items[0].label;
+              },
+              label: (it) => {
+                const ds = chart.data.datasets[it.datasetIndex];
+                const txt = fMes !== null ? ds.label : (ds.statusLabel || ds.label);
+                return ` ${txt}: ${it.parsed.y.toLocaleString('pt-BR')}`;
+              },
+              footer: (items) => {
+                const total = items.reduce((s, it) => s + it.parsed.y, 0);
+                return 'Total: ' + total.toLocaleString('pt-BR');
+              },
+            },
+          },
+        },
+        scales: {
+          x: { stacked: true, ticks: { color: '#8b949e' }, grid: { color: 'rgba(48,54,61,.4)' } },
+          y: { stacked: true, beginAtZero: true, ticks: { color: '#8b949e', precision: 0 }, grid: { color: 'rgba(48,54,61,.4)' } },
+        },
+      },
+    });
+  }
+
+  function renderTabelaMensal(meses, canais, porMes, coresCanal) {
+    const cont = document.getElementById('tabela-mensal');
+    if (meses.length === 0) { cont.innerHTML = '<div class="empty-msg">Nenhum dado no período.</div>'; return; }
+
+    // porMes[k][canal] agora é {status:count}; precisamos somar os status p/ obter total por canal/mês
+    const qtdCM = (k, c) => {
+      const obj = porMes[k] && porMes[k][c];
+      if (!obj) return 0;
+      return Object.values(obj).reduce((s, v) => s + v, 0);
+    };
+
+    const totaisCanal = {}; canais.forEach(c => totaisCanal[c] = 0);
+    let totalGeral = 0;
+
+    const linhas = meses.map(k => {
+      const totalMes = canais.reduce((s, c) => {
+        const v = qtdCM(k, c);
+        totaisCanal[c] += v; totalGeral += v;
+        return s + v;
+      }, 0);
+      const tds = canais.map(c => `<td class="right">${qtdCM(k, c).toLocaleString('pt-BR')}</td>`).join('');
+      return `<tr><td><strong>${rotuloMes(k)}</strong></td>${tds}<td class="right" style="color:var(--white);font-weight:700">${totalMes.toLocaleString('pt-BR')}</td></tr>`;
+    }).join('');
+
+    const ths = canais.map(c => `<th class="right"><span class="canal-pill"><span class="canal-dot" style="background:${coresCanal[c]}"></span>${escapeHtml(c)}</span></th>`).join('');
+    const totaisTd = canais.map(c => `<td class="right">${totaisCanal[c].toLocaleString('pt-BR')}</td>`).join('');
+
+    cont.innerHTML = `
+      <table class="dash">
+        <thead><tr><th>Mês</th>${ths}<th class="right">Total</th></tr></thead>
+        <tbody>${linhas}</tbody>
+        <tfoot><tr><td>Total</td>${totaisTd}<td class="right">${totalGeral.toLocaleString('pt-BR')}</td></tr></tfoot>
+      </table>
+    `;
+  }
+
+  function renderTabelaCanalStatus(canais, statuses, porCanalStatus, porCanal, coresCanal, coresStatus, total) {
+    const cont = document.getElementById('tabela-canal');
+    if (canais.length === 0) { cont.innerHTML = '<div class="empty-msg">Nenhum dado.</div>'; return; }
+
+    const ths = statuses.map(s =>
+      `<th class="right"><span class="canal-pill"><span class="canal-dot" style="background:${coresStatus[s]}"></span>${escapeHtml(s)}</span></th>`
+    ).join('');
+
+    const linhas = canais.map(c => {
+      const tds = statuses.map(s => {
+        const v = (porCanalStatus[c] && porCanalStatus[c][s]) || 0;
+        return `<td class="right">${v.toLocaleString('pt-BR')}</td>`;
+      }).join('');
+      const totalCanal = porCanal[c] || 0;
+      return `<tr>
+        <td><span class="canal-pill"><span class="canal-dot" style="background:${coresCanal[c]}"></span>${escapeHtml(c)}</span></td>
+        ${tds}
+        <td class="right" style="color:var(--white);font-weight:700">${totalCanal.toLocaleString('pt-BR')}</td>
+      </tr>`;
+    }).join('');
+
+    const totaisStatus = statuses.map(s => {
+      const t = canais.reduce((sum, c) => sum + ((porCanalStatus[c] && porCanalStatus[c][s]) || 0), 0);
+      return `<td class="right">${t.toLocaleString('pt-BR')}</td>`;
+    }).join('');
+
+    cont.innerHTML = `
+      <table class="dash">
+        <thead><tr><th>Canal</th>${ths}<th class="right">Total</th></tr></thead>
+        <tbody>${linhas}</tbody>
+        <tfoot><tr><td>Total</td>${totaisStatus}<td class="right">${total.toLocaleString('pt-BR')}</td></tr></tfoot>
+      </table>
+    `;
+  }
+
+  function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, m => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[m]));
+  }
+
+  carregar();
+</script>
+</body>
+</html>

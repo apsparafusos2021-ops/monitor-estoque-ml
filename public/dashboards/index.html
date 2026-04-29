@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboards — TORK TOOLS</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0d1117; --bg2: #161b22; --border: #21262d; --border2: #30363d;
+    --text: #c9d1d9; --text2: #8b949e; --text3: #6e7681; --white: #f0f6fc;
+    --blue: #58a6ff;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
+  header {
+    padding: 32px 28px 28px; border-bottom: 1px solid var(--border);
+    text-align: center;
+  }
+  .logo {
+    width: 56px; height: 56px; margin: 0 auto 14px;
+    background: linear-gradient(135deg, #f0883e, #58a6ff);
+    border-radius: 14px; display: flex; align-items: center; justify-content: center;
+    font-size: 1.6rem;
+  }
+  h1 { font-size: 1.6rem; font-weight: 700; color: var(--white); margin-bottom: 6px; letter-spacing: -.3px; }
+  .sub { font-size: 0.95rem; color: var(--text3); }
+  main {
+    flex: 1; padding: 40px 28px; max-width: 1200px; width: 100%; margin: 0 auto;
+  }
+  .grid {
+    display: grid; gap: 22px;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+  .card {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;
+    padding: 24px; text-decoration: none; color: inherit;
+    transition: all .15s; display: flex; flex-direction: column; gap: 8px;
+    position: relative; overflow: hidden;
+  }
+  .card::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+    background: var(--c, var(--blue)); opacity: .9;
+  }
+  .card:hover {
+    transform: translateY(-3px);
+    border-color: var(--c, var(--blue));
+    box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  }
+  .card-icon { font-size: 1.8rem; margin-bottom: 6px; }
+  .card-title { font-size: 1.05rem; color: var(--white); font-weight: 600; }
+  .card-desc { font-size: 0.85rem; color: var(--text2); line-height: 1.45; flex: 1; }
+  .card-arrow {
+    margin-top: 12px; font-size: 0.82rem; color: var(--c, var(--blue));
+    font-weight: 600; display: flex; align-items: center; gap: 4px;
+  }
+  footer {
+    padding: 20px 28px; text-align: center; color: var(--text3);
+    font-size: 0.78rem; border-top: 1px solid var(--border);
+  }
+  .section-title {
+    font-size: 0.78rem; color: var(--text2); text-transform: uppercase;
+    letter-spacing: .8px; font-weight: 600; margin: 32px 0 14px;
+  }
+  .section-title:first-child { margin-top: 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">📊</div>
+  <h1>Dashboards TORK TOOLS</h1>
+  <div class="sub">Painéis de operação e análise — Mercado Livre, devoluções e tratativas</div>
+</header>
+
+<main>
+  <div class="section-title">⚡ Operação</div>
+  <div class="grid">
+    <a class="card" style="--c:#f5b400" href="/">
+      <div class="card-icon">🏪</div>
+      <div class="card-title">Monitor Mercado Livre</div>
+      <div class="card-desc">Vendas Coleta CD, Alertas Estoque, Sem Fulfillment e Análise de NF-e em uma só tela.</div>
+      <div class="card-arrow">Abrir →</div>
+    </a>
+    <a class="card" style="--c:#58a6ff" href="/bipar">
+      <div class="card-icon">📦</div>
+      <div class="card-title">Bipar Etiquetas</div>
+      <div class="card-desc">Carrega o PDF de inbound, bipa EAN ou código ML do produto e gera etiquetas ZPL automaticamente.</div>
+      <div class="card-arrow">Abrir →</div>
+    </a>
+  </div>
+
+  <div class="section-title">📈 Análise</div>
+  <div class="grid">
+    <a class="card" style="--c:#1565C0" href="/grafico-status/">
+      <div class="card-icon">📋</div>
+      <div class="card-title">Tratativas — Status & SKU</div>
+      <div class="card-desc">Distribuição de status das tratativas, ranking de SKUs e custos por status. Filtros por mês/ano.</div>
+      <div class="card-arrow">Abrir →</div>
+    </a>
+    <a class="card" style="--c:#EF6C00" href="/acompanhamento-full/">
+      <div class="card-icon">📦</div>
+      <div class="card-title">Acompanhamento Full</div>
+      <div class="card-desc">Envios mensais por canal de venda (ML, Magalu, Amazon, Shopee…) com sub-stack por status.</div>
+      <div class="card-arrow">Abrir →</div>
+    </a>
+    <a class="card" style="--c:#C62828" href="/logistica-reversa/">
+      <div class="card-icon">↩️</div>
+      <div class="card-title">Logística Reversa</div>
+      <div class="card-desc">Análise de devoluções: motivos por origem (Fornecedor/Cliente/Transporte) e ranking de produtos que mais voltaram.</div>
+      <div class="card-arrow">Abrir →</div>
+    </a>
+  </div>
+</main>
+
+<footer>
+  TORK TOOLS · Painéis atualizam em tempo real conforme as planilhas Google Sheets / API ML
+</footer>
+
+</body>
+</html>

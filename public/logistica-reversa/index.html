@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logística Reversa — Análise de Devoluções</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0d1117; --bg2: #161b22; --border: #21262d; --border2: #30363d;
+    --text: #c9d1d9; --text2: #8b949e; --text3: #6e7681; --white: #f0f6fc;
+    --blue: #58a6ff; --orange: #f0883e; --green: #3fb950; --red: #f85149; --yellow: #d29922;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
+
+  header { padding: 16px 28px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; background: rgba(13,17,23,.95); backdrop-filter: blur(8px); }
+  .header-left { display: flex; align-items: center; gap: 14px; }
+  .logo { width: 36px; height: 36px; background: linear-gradient(135deg, #C62828, #EF6C00); border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; font-weight: 700; color: #fff; }
+  h1 { font-size: 1.05rem; font-weight: 600; color: var(--white); }
+  .sub { font-size: 0.75rem; color: var(--text3); margin-top: 2px; }
+  .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+  .btn { background: var(--bg2); border: 1px solid var(--border2); color: var(--text); padding: 8px 18px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; transition: all .15s; display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
+  .btn:hover { background: var(--border2); border-color: #484f58; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-primary { background: rgba(88,166,255,.15); border-color: rgba(88,166,255,.4); color: var(--blue); font-weight: 600; }
+  .btn-primary:hover { background: rgba(88,166,255,.25); }
+
+  .ts-badge { font-size: 0.75rem; color: var(--text3); background: var(--bg2); border: 1px solid var(--border); padding: 4px 12px; border-radius: 6px; }
+
+  .filter-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .filter-row label { font-size: 0.78rem; color: var(--text2); font-weight: 600; margin-right: 4px; }
+  .select { background: var(--bg2); color: var(--text); border: 1px solid var(--border2); border-radius: 7px; padding: 7px 12px; font-size: 0.85rem; font-weight: 500; cursor: pointer; outline: none; min-width: 100px; }
+  .select:hover { border-color: #484f58; }
+  .select:focus { border-color: var(--blue); }
+
+  main { flex: 1; padding: 28px; max-width: 1300px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+
+  .cards-row { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+  .stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; cursor: pointer; transition: border-color .15s, transform .15s, background .15s; position: relative; }
+  .stat-card:hover { border-color: var(--blue); background: rgba(88,166,255,.04); transform: translateY(-2px); }
+  .stat-card::after { content: '↗'; position: absolute; top: 12px; right: 14px; font-size: 0.8rem; color: var(--text3); opacity: 0; transition: opacity .15s; }
+  .stat-card:hover::after { opacity: 1; color: var(--blue); }
+  .stat-card .label { font-size: 0.72rem; color: var(--text2); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 6px; font-weight: 600; }
+  .stat-card .value { font-size: 1.85rem; font-weight: 700; color: var(--white); line-height: 1.1; }
+  .stat-card .sub-value { font-size: 0.72rem; color: var(--text3); margin-top: 4px; }
+
+  /* Modal */
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: none; align-items: center; justify-content: center; z-index: 100; padding: 24px; }
+  .modal-backdrop.open { display: flex; }
+  .modal-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; max-width: 900px; width: 100%; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; }
+  .modal-header { padding: 18px 22px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .modal-header h3 { font-size: 1rem; color: var(--white); font-weight: 600; }
+  .modal-header .modal-sub { font-size: 0.78rem; color: var(--text3); margin-top: 2px; }
+  .modal-close { background: transparent; border: 1px solid var(--border2); color: var(--text2); width: 30px; height: 30px; border-radius: 6px; cursor: pointer; font-size: 1rem; display: inline-flex; align-items: center; justify-content: center; }
+  .modal-close:hover { background: var(--border2); color: var(--white); }
+  .modal-body { padding: 16px 22px 22px; overflow-y: auto; }
+  .modal-search { width: 100%; background: var(--bg); border: 1px solid var(--border2); color: var(--text); padding: 8px 12px; border-radius: 7px; font-size: 0.85rem; margin-bottom: 12px; outline: none; }
+  .modal-search:focus { border-color: var(--blue); }
+
+  .grid-2 { display: grid; gap: 24px; grid-template-columns: 1.4fr 1fr; }
+  @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .chart-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 24px; display: flex; flex-direction: column; }
+  .chart-title { font-size: 0.78rem; color: var(--text2); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 16px; font-weight: 600; }
+  .chart-wrap { position: relative; flex: 1; min-height: 380px; display: flex; align-items: center; justify-content: center; }
+
+  .legend-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 20px; max-height: 480px; overflow-y: auto; }
+  .legend-card .label { font-size: 0.75rem; color: var(--text2); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 14px; font-weight: 600; }
+  .legend-item { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(33,38,45,.6); font-size: 0.85rem; }
+  .legend-item:last-child { border-bottom: none; }
+  .legend-color { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
+  .legend-text { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .legend-count { font-weight: 700; color: var(--white); min-width: 50px; text-align: right; }
+  .legend-pct { color: var(--text3); font-size: 0.75rem; min-width: 50px; text-align: right; }
+
+  .loading-overlay { position: absolute; inset: 0; background: rgba(13,17,23,.85); display: flex; align-items: center; justify-content: center; z-index: 10; border-radius: 14px; }
+  .spinner { width: 32px; height: 32px; border: 3px solid var(--border2); border-top-color: var(--blue); border-radius: 50%; animation: spin .75s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-msg { color: var(--red); padding: 16px; text-align: center; background: rgba(248,81,73,.08); border: 1px solid rgba(248,81,73,.2); border-radius: 10px; font-size: 0.85rem; }
+
+  /* Top produtos */
+  .topp-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 24px; }
+  .topp-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 8px; }
+  .topp-header h2 { font-size: 0.95rem; font-weight: 600; color: var(--white); }
+  .topp-header span { font-size: 0.78rem; color: var(--text3); }
+  .topp-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .topp-table th { text-align: left; padding: 10px 12px; color: var(--text2); text-transform: uppercase; letter-spacing: .6px; font-size: 0.72rem; font-weight: 600; border-bottom: 1px solid var(--border); }
+  .topp-table th.right, .topp-table td.right { text-align: right; }
+  .topp-table td { padding: 11px 12px; color: var(--text); border-bottom: 1px solid rgba(33,38,45,.6); vertical-align: top; }
+  .topp-table tr:last-child td { border-bottom: none; }
+  .topp-table tr:hover td { background: rgba(33,38,45,.4); }
+  .topp-table tbody tr.clickable { cursor: pointer; }
+  .topp-table tbody tr.clickable:hover td { background: rgba(88,166,255,.08); }
+  .mini-bar { display: inline-block; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; vertical-align: middle; min-width: 80px; }
+  .mini-bar-fill { height: 100%; border-radius: 3px; }
+  .rank-badge { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--border); color: var(--white); font-weight: 700; font-size: 0.78rem; }
+  .rank-badge.top1 { background: linear-gradient(135deg, #F9A825, #FF8F00); color: #000; }
+  .rank-badge.top2 { background: linear-gradient(135deg, #B0BEC5, #78909C); color: #000; }
+  .rank-badge.top3 { background: linear-gradient(135deg, #BF8970, #8D6E63); color: #fff; }
+  .sku-mono { font-family: 'Cascadia Code','Consolas',monospace; color: var(--white); font-weight: 600; }
+  .qtd-num { color: var(--white); font-weight: 700; }
+  .pct-bar-wrap { display: flex; align-items: center; gap: 8px; min-width: 120px; }
+  .pct-bar { flex: 1; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .pct-fill { height: 100%; background: linear-gradient(90deg, #C62828, #EF6C00); border-radius: 3px; }
+  .pct-num { font-size: 0.75rem; color: var(--text3); font-weight: 600; min-width: 40px; text-align: right; }
+  .desc-cell { max-width: 480px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <div class="logo">↩️</div>
+    <div>
+      <h1>Logística Reversa — Análise de Devoluções</h1>
+      <div class="sub">Devoluções por motivo + ranking de produtos que mais voltaram</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="filter-row">
+      <label>Mês:</label>
+      <select id="filtro-mes" class="select" onchange="processar()">
+        <option value="todos">Todos</option>
+      </select>
+      <label>Ano:</label>
+      <select id="filtro-ano" class="select" onchange="processar()">
+        <option value="todos">Todos</option>
+      </select>
+    </div>
+    <span class="ts-badge" id="ts-badge">—</span>
+    <button class="btn btn-primary" id="btn-refresh" onclick="carregar()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+      </svg>
+      Atualizar
+    </button>
+  </div>
+</header>
+
+<main>
+  <div class="cards-row" id="cards-row"></div>
+
+  <div class="grid-2">
+    <div class="chart-card">
+      <div class="chart-title">📈 Devoluções por origem do problema</div>
+      <div class="chart-wrap" id="chart-wrap">
+        <canvas id="pieChart"></canvas>
+        <div class="loading-overlay" id="loading"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <div class="legend-card">
+      <div class="label">Detalhamento</div>
+      <div id="legend-list"></div>
+    </div>
+  </div>
+
+  <div class="topp-card">
+    <div class="topp-header">
+      <h2>🏆 Produtos que mais voltaram</h2>
+      <span id="topp-info">—</span>
+    </div>
+    <div id="topp-list"></div>
+  </div>
+</main>
+
+<div class="modal-backdrop" id="modal" onclick="if(event.target.id==='modal')fecharModal()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div>
+        <h3 id="modal-title">—</h3>
+        <div class="modal-sub" id="modal-sub"></div>
+      </div>
+      <button class="modal-close" onclick="fecharModal()" title="Fechar (Esc)">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="text" class="modal-search" id="modal-search" placeholder="Filtrar…" oninput="filtrarModal()" />
+      <div id="modal-content"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SHEET_ID = '1YaCmwdWjOdPw0tn7JbiFRas666mGGLzyV5mPsWeWSdE';
+  // Estrutura da planilha (índices 0-based):
+  const OPERADOR_COL  = 1;  // B
+  const VENDA_COL     = 2;  // C - Número da Venda (única identidade do registro)
+  const ORIGEM_COL    = 3;  // D
+  const DATA_COL      = 4;  // E - Data de entrada
+  const CLIENTE_COL   = 8;  // I
+  const MOTIVO_OLD_COL = 9; // J - Motivo (preenchido apenas em registros antigos)
+  const SKU_COL       = 10; // K - código/sku
+  const DESC_COL      = 11; // L - Descrição
+  const MARCA_COL     = 12; // M
+  const QTD_COL       = 13; // N - Quantidade do item
+  const ANALISE_COL   = 14; // O - Origem (Fornecedor / Cliente / Transporte)
+  const CONFER_COL    = 15; // P - Conferência (Defeito / Produto OK)
+  const STATUS_COL    = 17; // R - Garantia / Estoque
+
+  // Tradução de motivos em inglês (vindos da API do ML em registros antigos)
+  const TRADUCOES_MOTIVO = {
+    'mediations cancel the order': 'Mediação cancelou pedido',
+    'the shipment was not delivered': 'Envio não entregue',
+    'there is a mediation with status cancel_purchase': 'Mediação cancelou compra',
+    'a fraud tag cancel the order': 'Cancelado por fraude',
+    'the buyer regretted the purchase': 'Cliente arrependeu da compra',
+    'product not as described': 'Produto não corresponde ao anúncio',
+    'changed mind': 'Mudou de ideia',
+    'better price found': 'Encontrou preço melhor',
+    'never received': 'Não recebeu',
+    'damaged': 'Danificado',
+    'wrong item': 'Item errado',
+    'defective': 'Defeituoso',
+  };
+
+  function traduzirMotivo(motivo) {
+    const norm = String(motivo || '').toLowerCase().trim();
+    return TRADUCOES_MOTIVO[norm] || motivo;
+  }
+
+  // Devolve o "motivo" usado para agregação:
+  //  1º) coluna Análise (Fornecedor/Cliente/Transporte) — preenchida nos registros novos
+  //  2º) fallback para a coluna Motivo antiga (já traduzida se vier em inglês)
+  function getMotivo(row) {
+    const analise = (row[ANALISE_COL] || '').trim();
+    if (analise) return analise;
+    const antigo = (row[MOTIVO_OLD_COL] || '').trim();
+    if (antigo) return traduzirMotivo(antigo);
+    return '';
+  }
+
+  const NOMES_MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  let dadosCache = [];
+  let filtradasCache = []; // últimas linhas após filtros (mês/ano)
+  let labelsCache = [], dataCache2 = [], coresCache = [];
+
+  function parseData(valor) {
+    if (!valor) return null;
+    const s = String(valor).trim();
+    let m = s.match(/^Date\((\d+),(\d+),(\d+)/);
+    if (m) return { ano: +m[1], mes: +m[2] };
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (m) {
+      let ano = +m[3]; if (ano < 100) ano += 2000;
+      return { ano, mes: +m[2] - 1 };
+    }
+    m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) return { ano: +m[1], mes: +m[2] - 1 };
+    return null;
+  }
+
+  // Paleta profissional (Material Design 700/800) — mesma do tratativas
+  const PALETA = [
+    '#1565C0','#6A1B9A','#00838F','#283593','#AD1457','#EF6C00','#4527A0','#558B2F',
+    '#00695C','#5D4037','#3949AB','#7B1FA2','#0277BD','#C2185B','#827717','#37474F',
+  ];
+
+  // Cores fixas por motivo (mesma lógica do tratativas: verde/azul/vermelho/amarelo)
+  const COR_VERDE    = '#2E7D32'; // ok / sucesso
+  const COR_AZUL     = '#1565C0'; // em andamento / decisão do cliente
+  const COR_VERMELHA = '#C62828'; // perda / defeito / fraude
+  const COR_AMARELA  = '#F9A825'; // alerta / problema logístico
+  const CORES_FIXAS = {
+    // Análise (origem do problema)
+    'fornecedor':         COR_VERMELHA,
+    'cliente':            COR_AZUL,
+    'transporte':         COR_AMARELA,
+    // Conferência
+    'defeito':            COR_VERMELHA,
+    'produto ok':         COR_VERDE,
+    'sem defeito':        COR_VERDE,
+    // Status / antigos
+    'com defeito':        COR_VERMELHA,
+    'avariado':           COR_VERMELHA,
+    'cancelado por fraude': COR_VERMELHA,
+    'arrependimento':     COR_AZUL,
+    'desistencia':        COR_AZUL,
+    'cliente arrependeu da compra': COR_AZUL,
+    'mudou de ideia':     COR_AZUL,
+    'troca':              COR_AZUL,
+    'devolucao':          COR_AZUL,
+    'mediacao cancelou pedido': COR_AZUL,
+    'mediacao cancelou compra': COR_AZUL,
+    'envio nao entregue': COR_AMARELA,
+    'nao recebeu':        COR_AMARELA,
+    'atraso':             COR_AMARELA,
+    'extravio':           COR_AMARELA,
+    'insucesso na entrega': COR_AMARELA,
+    'produto errado':     COR_VERMELHA,
+    'item errado':        COR_VERMELHA,
+    'enviado errado':     COR_VERMELHA,
+    'garantia':           COR_VERMELHA,
+    'estoque':            COR_VERDE,
+  };
+
+  function normalizar(s) {
+    return String(s || '').toLowerCase().trim()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/\s+/g, ' ');
+  }
+
+  function corParaMotivo(motivo, fallbackIdx) {
+    const fixa = CORES_FIXAS[normalizar(motivo)];
+    if (fixa) return fixa;
+    return PALETA[fallbackIdx % PALETA.length];
+  }
+
+  let chart = null;
+
+  async function fetchSheet() {
+    const baseUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
+    try {
+      const res = await fetch(baseUrl);
+      if (res.ok) {
+        const text = await res.text();
+        return parseGvizFromString(text);
+      }
+    } catch {}
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      const timer = setTimeout(() => { cleanup(); reject(new Error('Timeout — verifique se a planilha está pública')); }, 20000);
+      function cleanup() {
+        clearTimeout(timer);
+        if (script.parentNode) script.remove();
+        try { delete window.google.visualization.Query.setResponse; } catch {}
+      }
+      window.google = window.google || {};
+      window.google.visualization = window.google.visualization || {};
+      window.google.visualization.Query = window.google.visualization.Query || {};
+      window.google.visualization.Query.setResponse = function(json) {
+        cleanup();
+        try {
+          if (json.status === 'error') return reject(new Error(json.errors?.[0]?.message || 'Erro na planilha'));
+          const rows = (json.table.rows || []).map(row =>
+            (row.c || []).map(cell => (cell && cell.v != null) ? String(cell.v) : '')
+          );
+          resolve({ rows });
+        } catch(e) { reject(e); }
+      };
+      script.onerror = () => { cleanup(); reject(new Error('Falha ao conectar com o Google Sheets')); };
+      script.src = baseUrl;
+      document.head.appendChild(script);
+    });
+  }
+
+  function parseGvizFromString(text) {
+    const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
+    if (json.status === 'error') throw new Error(json.errors?.[0]?.message || 'Erro na planilha');
+    const rows = (json.table.rows || []).map(row =>
+      (row.c || []).map(cell => (cell && cell.v != null) ? String(cell.v) : '')
+    );
+    return { rows };
+  }
+
+  // Normaliza número da venda: remove "#", espaços e zeros à esquerda; uppercase
+  function normalizarVenda(v) {
+    return String(v || '').trim().replace(/^#+/, '').replace(/\s+/g, '').toUpperCase();
+  }
+
+  // Lê quantidade do item (col N) — vazio ou inválido vira 1
+  function parseQtd(v) {
+    if (v == null || v === '') return 1;
+    const s = String(v).trim().replace(',', '.');
+    const n = parseFloat(s);
+    return (isNaN(n) || n <= 0) ? 1 : Math.round(n);
+  }
+
+  // Decide se a linha é uma linha de produto válida:
+  //  precisa ter número de venda (qualquer formato — ML "200…", Amazon "701-…",
+  //  Shopee "260…U8N7", às vezes prefixado por "#") E data parseável.
+  function linhaValida(row) {
+    const venda = normalizarVenda(row[VENDA_COL]);
+    if (!venda) return false;
+    if (venda.length < 4) return false;                      // descarta lixo curto
+    if (/^[A-ZÀ-Ú\s]+$/i.test(venda)) return false;          // descarta cabeçalhos puros de texto
+    if (!/[A-Z0-9]/.test(venda)) return false;
+    if (/^N[ÚU]MERO/i.test(venda)) return false;             // descarta o cabeçalho "Número da Venda"
+    return parseData(row[DATA_COL]) !== null;
+  }
+
+  async function carregar() {
+    const btn = document.getElementById('btn-refresh');
+    const loading = document.getElementById('loading');
+    btn.disabled = true; loading.style.display = 'flex';
+    try {
+      const { rows } = await fetchSheet();
+      dadosCache = rows.filter(linhaValida);
+      popularFiltros();
+      processar();
+      document.getElementById('ts-badge').textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR');
+    } catch (e) {
+      console.error(e);
+      document.getElementById('chart-wrap').innerHTML = `<div class="error-msg">Erro ao carregar: ${e.message}</div>`;
+    } finally {
+      btn.disabled = false;
+      const l = document.getElementById('loading'); if (l) l.style.display = 'none';
+    }
+  }
+
+  function popularFiltros() {
+    const anos = new Set();
+    const meses = new Set();
+    for (const row of dadosCache) {
+      const d = parseData(row[DATA_COL]);
+      if (!d) continue;
+      anos.add(d.ano); meses.add(d.mes);
+    }
+    const anosOrd = [...anos].sort((a, b) => b - a);
+    const selAno = document.getElementById('filtro-ano');
+    const anoAtual = selAno.value;
+    selAno.innerHTML = '<option value="todos">Todos</option>' +
+      anosOrd.map(a => `<option value="${a}">${a}</option>`).join('');
+    if (anosOrd.includes(parseInt(anoAtual))) selAno.value = anoAtual;
+
+    const mesesOrd = [...meses].sort((a, b) => a - b);
+    const selMes = document.getElementById('filtro-mes');
+    const mesAtual = selMes.value;
+    selMes.innerHTML = '<option value="todos">Todos</option>' +
+      mesesOrd.map(m => `<option value="${m}">${NOMES_MESES[m]}</option>`).join('');
+    if (mesesOrd.includes(parseInt(mesAtual))) selMes.value = mesAtual;
+  }
+
+  function processar() {
+    if (!dadosCache.length) return;
+
+    const filtroAno = document.getElementById('filtro-ano').value;
+    const filtroMes = document.getElementById('filtro-mes').value;
+    const fAno = filtroAno === 'todos' ? null : parseInt(filtroAno);
+    const fMes = filtroMes === 'todos' ? null : parseInt(filtroMes);
+
+    const filtradas = dadosCache.filter(row => {
+      const d = parseData(row[DATA_COL]);
+      if (!d) return false;
+      if (fAno !== null && d.ano !== fAno) return false;
+      if (fMes !== null && d.mes !== fMes) return false;
+      return true;
+    });
+
+    // Conta motivos (uma contagem por linha = 1 produto retornado)
+    const contagensMotivo = {};
+    let semMotivo = 0;
+    let totalProdutos = 0;
+    const vendasUnicas = new Set();
+    const clientesUnicos = new Set();
+
+    for (const row of filtradas) {
+      const qtd = parseQtd(row[QTD_COL]);
+      totalProdutos += qtd;
+      const venda = normalizarVenda(row[VENDA_COL]);
+      if (venda) vendasUnicas.add(venda);
+      const cliente = (row[CLIENTE_COL] || '').trim();
+      if (cliente) clientesUnicos.add(cliente);
+
+      const motivo = getMotivo(row);
+      if (!motivo) { semMotivo++; continue; }
+      contagensMotivo[motivo] = (contagensMotivo[motivo] || 0) + qtd;
+    }
+
+    // Ordena agrupando cores iguais (mesma lógica do tratativas)
+    const ORDEM_CORES = [COR_VERDE, COR_AZUL, COR_AMARELA, COR_VERMELHA];
+    function grupoCor(motivo) {
+      const fixa = CORES_FIXAS[normalizar(motivo)];
+      if (!fixa) return ORDEM_CORES.length + 1;
+      const idx = ORDEM_CORES.indexOf(fixa);
+      return idx >= 0 ? idx : ORDEM_CORES.length;
+    }
+    const entries = Object.entries(contagensMotivo).sort((a, b) => {
+      const ga = grupoCor(a[0]); const gb = grupoCor(b[0]);
+      if (ga !== gb) return ga - gb;
+      return b[1] - a[1];
+    });
+    const labels = entries.map(e => e[0]);
+    const data = entries.map(e => e[1]);
+    let fbIdx = 0;
+    const colors = labels.map(l => {
+      const fixa = CORES_FIXAS[normalizar(l)];
+      if (fixa) return fixa;
+      return PALETA[fbIdx++ % PALETA.length];
+    });
+    const totalMotivos = data.reduce((s, v) => s + v, 0);
+
+    // Cache para os modais usarem
+    filtradasCache = filtradas;
+    labelsCache = labels; dataCache2 = data; coresCache = colors;
+
+    renderCards(vendasUnicas.size, totalProdutos, clientesUnicos.size, labels.length, fAno, fMes);
+    renderChart(labels, data, colors);
+    renderLegend(labels, data, colors, totalMotivos);
+    renderTopProdutos(filtradas, fAno, fMes);
+  }
+
+  function rotuloPeriodo(fAno, fMes) {
+    if (fAno === null && fMes === null) return 'Todo o período';
+    const partes = [];
+    if (fMes !== null) partes.push(NOMES_MESES[fMes]);
+    if (fAno !== null) partes.push(fAno);
+    return partes.join(' / ');
+  }
+
+  function renderCards(vendasUnicas, totalProdutos, clientes, motivos, fAno, fMes) {
+    const periodo = rotuloPeriodo(fAno, fMes);
+    const diff = totalProdutos - vendasUnicas;
+    document.getElementById('cards-row').innerHTML = `
+      <div class="stat-card" onclick="abrirModalVendas()" title="Clique para ver as vendas">
+        <div class="label">Devoluções (vendas únicas)</div>
+        <div class="value">${vendasUnicas.toLocaleString('pt-BR')}</div>
+        <div class="sub-value">${periodo}</div>
+      </div>
+      <div class="stat-card" onclick="abrirModalProdutos()" title="Clique para ver os produtos">
+        <div class="label">Produtos retornados</div>
+        <div class="value">${totalProdutos.toLocaleString('pt-BR')}</div>
+        <div class="sub-value">${diff > 0 ? diff.toLocaleString('pt-BR') + ' a mais que vendas (qtd. somada da col. N)' : 'soma das quantidades (col. N)'}</div>
+      </div>
+      <div class="stat-card" onclick="abrirModalClientes()" title="Clique para ver os clientes">
+        <div class="label">Clientes únicos</div>
+        <div class="value">${clientes.toLocaleString('pt-BR')}</div>
+        <div class="sub-value">com pelo menos uma devolução</div>
+      </div>
+      <div class="stat-card" onclick="abrirModalMotivos()" title="Clique para ver os motivos">
+        <div class="label">Motivos distintos</div>
+        <div class="value">${motivos.toLocaleString('pt-BR')}</div>
+        <div class="sub-value">no período filtrado</div>
+      </div>
+    `;
+  }
+
+  // ── MODAIS ────────────────────────────────────────────────────────────────
+  function abrirModal(titulo, sub, html) {
+    document.getElementById('modal-title').textContent = titulo;
+    document.getElementById('modal-sub').textContent = sub;
+    document.getElementById('modal-content').innerHTML = html;
+    document.getElementById('modal-search').value = '';
+    document.getElementById('modal').classList.add('open');
+  }
+  function fecharModal() { document.getElementById('modal').classList.remove('open'); }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharModal(); });
+
+  function filtrarModal() {
+    const q = document.getElementById('modal-search').value.toLowerCase().trim();
+    const linhas = document.querySelectorAll('#modal-content tbody tr');
+    linhas.forEach(tr => {
+      const txt = tr.textContent.toLowerCase();
+      tr.style.display = (!q || txt.includes(q)) ? '' : 'none';
+    });
+  }
+
+  function abrirModalVendas() {
+    // Agrupa por venda (col C unificada via normalizarVenda)
+    const m = {};
+    for (const row of filtradasCache) {
+      const v = normalizarVenda(row[VENDA_COL]);
+      if (!v) continue;
+      if (!m[v]) m[v] = { venda: row[VENDA_COL], cliente: row[CLIENTE_COL] || '', origem: row[ORIGEM_COL] || '', data: row[DATA_COL] || '', linhas: 0, qtd: 0 };
+      m[v].linhas++;
+      m[v].qtd += parseQtd(row[QTD_COL]);
+    }
+    const lista = Object.values(m).sort((a, b) => b.qtd - a.qtd);
+    const linhas = lista.map(it => `
+      <tr>
+        <td class="sku-mono">${escapeHtml(it.venda)}</td>
+        <td>${escapeHtml(formatarData(it.data))}</td>
+        <td>${escapeHtml(it.origem)}</td>
+        <td>${escapeHtml(it.cliente)}</td>
+        <td class="right qtd-num">${it.qtd}</td>
+      </tr>`).join('');
+    abrirModal('Vendas únicas com devolução', `${lista.length.toLocaleString('pt-BR')} vendas (col. C unificada)`,
+      `<table class="topp-table">
+        <thead><tr><th>Número da Venda</th><th>Data</th><th>Origem</th><th>Cliente</th><th class="right">Qtd. itens</th></tr></thead>
+        <tbody>${linhas || '<tr><td colspan="5" style="text-align:center;color:var(--text3)">Nenhuma venda no período.</td></tr>'}</tbody>
+      </table>`);
+  }
+
+  function abrirModalProdutos() {
+    let totalQtd = 0;
+    const linhas = filtradasCache.map(row => {
+      const q = parseQtd(row[QTD_COL]);
+      totalQtd += q;
+      return `<tr>
+        <td class="sku-mono">${escapeHtml((row[SKU_COL] || '').trim() || '—')}</td>
+        <td>${escapeHtml((row[DESC_COL] || '').trim() || '—')}</td>
+        <td>${escapeHtml((row[MARCA_COL] || '').trim() || '—')}</td>
+        <td class="right qtd-num">${q}</td>
+        <td>${escapeHtml(formatarData(row[DATA_COL]))}</td>
+        <td>${escapeHtml(getMotivo(row) || '—')}</td>
+      </tr>`;
+    }).join('');
+    abrirModal('Produtos retornados', `${totalQtd.toLocaleString('pt-BR')} itens (soma da col. N) em ${filtradasCache.length.toLocaleString('pt-BR')} linhas`,
+      `<table class="topp-table">
+        <thead><tr><th>SKU</th><th>Descrição</th><th>Marca</th><th class="right">Qtd</th><th>Data</th><th>Motivo</th></tr></thead>
+        <tbody>${linhas || '<tr><td colspan="6" style="text-align:center;color:var(--text3)">Nenhum produto.</td></tr>'}</tbody>
+      </table>`);
+  }
+
+  function abrirModalClientes() {
+    const m = {};
+    for (const row of filtradasCache) {
+      const c = (row[CLIENTE_COL] || '').trim();
+      if (!c) continue;
+      if (!m[c]) m[c] = { cliente: c, devolucoes: 0, vendas: new Set() };
+      m[c].devolucoes += parseQtd(row[QTD_COL]);
+      const v = normalizarVenda(row[VENDA_COL]); if (v) m[c].vendas.add(v);
+    }
+    const lista = Object.values(m).sort((a, b) => b.devolucoes - a.devolucoes);
+    const linhas = lista.map((it, i) => `
+      <tr>
+        <td style="width:48px"><span class="rank-badge ${i===0?'top1':i===1?'top2':i===2?'top3':''}">${i + 1}</span></td>
+        <td>${escapeHtml(it.cliente)}</td>
+        <td class="right qtd-num">${it.vendas.size}</td>
+        <td class="right qtd-num">${it.devolucoes}</td>
+      </tr>`).join('');
+    abrirModal('Clientes com devolução', `${lista.length.toLocaleString('pt-BR')} clientes únicos`,
+      `<table class="topp-table">
+        <thead><tr><th>#</th><th>Cliente</th><th class="right">Vendas</th><th class="right">Itens</th></tr></thead>
+        <tbody>${linhas || '<tr><td colspan="4" style="text-align:center;color:var(--text3)">Nenhum cliente no período.</td></tr>'}</tbody>
+      </table>`);
+  }
+
+  function abrirModalMotivos() {
+    const total = dataCache2.reduce((s, v) => s + v, 0);
+    const linhas = labelsCache.map((label, i) => {
+      const pct = total > 0 ? (dataCache2[i] / total * 100).toFixed(1) : '0.0';
+      return `<tr>
+        <td><span class="canal-pill" style="display:inline-flex;align-items:center;gap:8px"><span style="width:12px;height:12px;border-radius:3px;display:inline-block;background:${coresCache[i]}"></span>${escapeHtml(label)}</span></td>
+        <td class="right qtd-num">${dataCache2[i].toLocaleString('pt-BR')}</td>
+        <td class="right" style="color:var(--text3)">${pct}%</td>
+      </tr>`;
+    }).join('');
+    abrirModal('Motivos das devoluções', `${labelsCache.length} motivos distintos · ${total.toLocaleString('pt-BR')} ocorrências`,
+      `<table class="topp-table">
+        <thead><tr><th>Motivo</th><th class="right">Ocorrências</th><th class="right">% do total</th></tr></thead>
+        <tbody>${linhas || '<tr><td colspan="3" style="text-align:center;color:var(--text3)">Nenhum motivo.</td></tr>'}</tbody>
+      </table>`);
+  }
+
+  // Modal: detalhes de um produto específico (motivos + vendas)
+  function abrirModalProdutoDetalhes(chave) {
+    // Decodifica entidades HTML que vieram do atributo
+    const tmp = document.createElement('textarea');
+    tmp.innerHTML = chave;
+    const key = tmp.value;
+
+    // Filtra as linhas filtradas pelo SKU (se houver) ou pela Descrição
+    const linhasProduto = filtradasCache.filter(row => {
+      const sku  = (row[SKU_COL]  || '').trim();
+      const desc = (row[DESC_COL] || '').trim();
+      const k = sku || desc || '(sem produto)';
+      return k === key;
+    });
+
+    if (linhasProduto.length === 0) {
+      abrirModal('Detalhes do produto', key, '<div style="color:var(--text3);text-align:center;padding:24px">Nenhuma devolução encontrada.</div>');
+      return;
+    }
+
+    const primeira = linhasProduto[0];
+    const sku   = (primeira[SKU_COL]  || '').trim();
+    const desc  = (primeira[DESC_COL] || '').trim();
+    const marca = (primeira[MARCA_COL] || '').trim();
+
+    // 1) Agrupa por motivo (somando qtd da col N)
+    const motivos = {};
+    let totalQtd = 0;
+    for (const row of linhasProduto) {
+      const q = parseQtd(row[QTD_COL]);
+      totalQtd += q;
+      const motivo = getMotivo(row) || '(sem motivo)';
+      motivos[motivo] = (motivos[motivo] || 0) + q;
+    }
+    const motivosOrdenados = Object.entries(motivos).sort((a, b) => b[1] - a[1]);
+
+    const linhasMotivos = motivosOrdenados.map(([m, q]) => {
+      const pct = totalQtd > 0 ? (q / totalQtd * 100) : 0;
+      const cor = CORES_FIXAS[normalizar(m)] || '#6e7681';
+      return `<tr>
+        <td><span style="display:inline-flex;align-items:center;gap:8px"><span style="width:11px;height:11px;border-radius:3px;background:${cor};display:inline-block"></span>${escapeHtml(m)}</span></td>
+        <td class="right qtd-num">${q.toLocaleString('pt-BR')}</td>
+        <td class="right" style="color:var(--text3)">${pct.toFixed(1)}%</td>
+        <td><span class="mini-bar"><span class="mini-bar-fill" style="width:${pct.toFixed(1)}%;background:${cor}"></span></span></td>
+      </tr>`;
+    }).join('');
+
+    // 2) Lista de vendas/devoluções individuais
+    const linhasVendas = linhasProduto
+      .slice()
+      .sort((a, b) => String(b[DATA_COL] || '').localeCompare(String(a[DATA_COL] || '')))
+      .map(row => `<tr>
+        <td>${escapeHtml(formatarData(row[DATA_COL]))}</td>
+        <td class="sku-mono">${escapeHtml((row[VENDA_COL] || '').trim() || '—')}</td>
+        <td>${escapeHtml((row[ORIGEM_COL] || '').trim() || '—')}</td>
+        <td>${escapeHtml((row[CLIENTE_COL] || '').trim() || '—')}</td>
+        <td class="right qtd-num">${parseQtd(row[QTD_COL])}</td>
+        <td>${escapeHtml(getMotivo(row) || '—')}</td>
+        <td style="color:var(--text3);max-width:280px">${escapeHtml((row[16] || '').trim())}</td>
+      </tr>`).join('');
+
+    const cabecalho = `
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:18px">
+        <div style="font-size:0.72rem;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">Produto</div>
+        <div style="color:var(--white);font-weight:600;margin-bottom:4px">${escapeHtml(desc || '—')}</div>
+        <div style="font-size:0.78rem;color:var(--text3)">SKU: <span class="sku-mono">${escapeHtml(sku || '—')}</span> · Marca: ${escapeHtml(marca || '—')} · Total: <strong style="color:var(--white)">${totalQtd.toLocaleString('pt-BR')}</strong> devolução(ões)</div>
+      </div>`;
+
+    const secaoMotivos = `
+      <div style="font-size:0.78rem;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;font-weight:600">📊 Motivos das devoluções deste produto</div>
+      <table class="topp-table" style="margin-bottom:24px">
+        <thead><tr><th>Motivo</th><th class="right">Qtd</th><th class="right">%</th><th></th></tr></thead>
+        <tbody>${linhasMotivos}</tbody>
+      </table>`;
+
+    const secaoVendas = `
+      <div style="font-size:0.78rem;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;font-weight:600">📋 Devoluções individuais (${linhasProduto.length} linha${linhasProduto.length>1?'s':''})</div>
+      <table class="topp-table">
+        <thead><tr><th>Data</th><th>Venda</th><th>Origem</th><th>Cliente</th><th class="right">Qtd</th><th>Motivo</th><th>OBS Produto</th></tr></thead>
+        <tbody>${linhasVendas}</tbody>
+      </table>`;
+
+    abrirModal(
+      'Detalhes do produto',
+      `${motivosOrdenados.length} motivo(s) · ${totalQtd.toLocaleString('pt-BR')} devolução(ões)`,
+      cabecalho + secaoMotivos + secaoVendas
+    );
+  }
+
+  function formatarData(v) {
+    if (!v) return '—';
+    const s = String(v).trim();
+    let m = s.match(/^Date\((\d+),(\d+),(\d+)/);
+    if (m) {
+      const ano = +m[1], mes = +m[2] + 1, dia = +m[3];
+      return `${String(dia).padStart(2,'0')}/${String(mes).padStart(2,'0')}/${ano}`;
+    }
+    m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) return `${m[3].padStart(2,'0')}/${m[2].padStart(2,'0')}/${m[1]}`;
+    return s; // já está em dd/mm/yyyy ou similar
+  }
+
+  function renderChart(labels, data, colors) {
+    if (chart) chart.destroy();
+    const ctx = document.getElementById('pieChart').getContext('2d');
+    chart = new Chart(ctx, {
+      type: 'pie',
+      data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: '#0d1117', borderWidth: 2, hoverOffset: 14 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        animation: { animateRotate: true, animateScale: true, duration: 800 },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#161b22', borderColor: '#30363d', borderWidth: 1,
+            titleColor: '#f0f6fc', bodyColor: '#c9d1d9', padding: 12,
+            callbacks: {
+              label: (c) => {
+                const total = c.dataset.data.reduce((s, v) => s + v, 0);
+                const pct = total > 0 ? ((c.parsed / total) * 100).toFixed(1) : '0.0';
+                return `${c.label}: ${c.parsed} (${pct}%)`;
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  function renderLegend(labels, data, colors, total) {
+    const list = document.getElementById('legend-list');
+    if (labels.length === 0) {
+      list.innerHTML = '<div style="color:var(--text3);text-align:center;padding:24px;font-size:0.85rem">Nenhum motivo no período.</div>';
+      return;
+    }
+    list.innerHTML = labels.map((label, i) => {
+      const pct = total > 0 ? ((data[i] / total) * 100).toFixed(1) : '0.0';
+      return `<div class="legend-item">
+        <div class="legend-color" style="background:${colors[i]}"></div>
+        <div class="legend-text" title="${escapeHtml(label)}">${escapeHtml(label)}</div>
+        <div class="legend-count">${data[i].toLocaleString('pt-BR')}</div>
+        <div class="legend-pct">${pct}%</div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderTopProdutos(rows, fAno, fMes) {
+    const cont = {};
+    for (const row of rows) {
+      const desc = (row[DESC_COL] || '').trim();
+      const sku  = (row[SKU_COL]  || '').trim();
+      const marca = (row[MARCA_COL] || '').trim();
+      // Chave: prioriza SKU, senão usa Descrição
+      const key = sku || desc || '(sem produto)';
+      if (!cont[key]) cont[key] = { sku, desc, marca, qtd: 0 };
+      cont[key].qtd += parseQtd(row[QTD_COL]);
+      if (desc && !cont[key].desc) cont[key].desc = desc;
+      if (marca && !cont[key].marca) cont[key].marca = marca;
+    }
+    const lista = Object.values(cont).sort((a, b) => b.qtd - a.qtd);
+    const top = lista.slice(0, 30);
+    const totalOcorr = lista.reduce((s, x) => s + x.qtd, 0);
+
+    const info = document.getElementById('topp-info');
+    let label = `${lista.length} produto(s) distinto(s) · ${rotuloPeriodo(fAno, fMes)}`;
+    info.textContent = label;
+
+    const container = document.getElementById('topp-list');
+    if (top.length === 0) {
+      container.innerHTML = '<div style="color:var(--text3);text-align:center;padding:24px;font-size:0.85rem">Nenhum produto no período selecionado.</div>';
+      return;
+    }
+
+    const linhas = top.map((it, i) => {
+      const pct = totalOcorr > 0 ? (it.qtd / totalOcorr) * 100 : 0;
+      const rankClass = i === 0 ? 'top1' : i === 1 ? 'top2' : i === 2 ? 'top3' : '';
+      // Chave do produto (mesma usada no agrupamento) — passa pra função do modal
+      const keyAttr = escapeHtml(it.sku || it.desc || '(sem produto)');
+      return `<tr class="clickable" onclick="abrirModalProdutoDetalhes('${keyAttr.replace(/'/g, "&#39;")}')" title="Clique para ver motivos das devoluções deste produto">
+        <td style="width:48px"><div class="rank-badge ${rankClass}">${i + 1}</div></td>
+        <td class="sku-mono">${escapeHtml(it.sku || '—')}</td>
+        <td class="desc-cell">${escapeHtml(it.desc || '—')}</td>
+        <td>${escapeHtml(it.marca || '—')}</td>
+        <td class="right qtd-num">${it.qtd.toLocaleString('pt-BR')}</td>
+        <td>
+          <div class="pct-bar-wrap">
+            <div class="pct-bar"><div class="pct-fill" style="width:${pct.toFixed(1)}%"></div></div>
+            <div class="pct-num">${pct.toFixed(1)}%</div>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+
+    container.innerHTML = `
+      <table class="topp-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>SKU</th>
+            <th>Descrição</th>
+            <th>Marca</th>
+            <th class="right">Devoluções</th>
+            <th>% do total</th>
+          </tr>
+        </thead>
+        <tbody>${linhas}</tbody>
+      </table>
+      ${lista.length > 30 ? `<div style="text-align:center;color:var(--text3);font-size:0.78rem;margin-top:14px">Mostrando os 30 primeiros de ${lista.length} produtos</div>` : ''}
+    `;
+  }
+
+  function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, m => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[m]));
+  }
+
+  carregar();
+</script>
+</body>
+</html>

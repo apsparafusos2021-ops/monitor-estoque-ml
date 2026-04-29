@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tratativas — Análise por Status e SKU</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0d1117; --bg2: #161b22; --border: #21262d; --border2: #30363d;
+    --text: #c9d1d9; --text2: #8b949e; --text3: #6e7681; --white: #f0f6fc;
+    --blue: #58a6ff; --orange: #f0883e; --green: #3fb950; --red: #f85149; --yellow: #d29922;
+  }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh; display: flex; flex-direction: column;
+  }
+
+  header {
+    padding: 16px 28px; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 12px; flex-wrap: wrap;
+    background: rgba(13,17,23,.95); backdrop-filter: blur(8px);
+  }
+  .header-left { display: flex; align-items: center; gap: 14px; }
+  .logo {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, #f0883e, #58a6ff);
+    border-radius: 9px; display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; font-weight: 700; color: #fff;
+  }
+  h1 { font-size: 1.05rem; font-weight: 600; color: var(--white); }
+  .sub { font-size: 0.75rem; color: var(--text3); margin-top: 2px; }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+
+  .btn {
+    background: var(--bg2); border: 1px solid var(--border2);
+    color: var(--text); padding: 8px 18px; border-radius: 8px;
+    cursor: pointer; font-size: 0.85rem; transition: all .15s;
+    display: inline-flex; align-items: center; gap: 6px; font-weight: 500;
+  }
+  .btn:hover { background: var(--border2); border-color: #484f58; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-primary {
+    background: rgba(88,166,255,.15); border-color: rgba(88,166,255,.4);
+    color: var(--blue); font-weight: 600;
+  }
+  .btn-primary:hover { background: rgba(88,166,255,.25); }
+
+  .ts-badge {
+    font-size: 0.75rem; color: var(--text3);
+    background: var(--bg2); border: 1px solid var(--border);
+    padding: 4px 12px; border-radius: 6px;
+  }
+
+  .filter-row {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .filter-row label {
+    font-size: 0.78rem; color: var(--text2); font-weight: 600;
+    margin-right: 4px;
+  }
+  .select {
+    background: var(--bg2); color: var(--text);
+    border: 1px solid var(--border2); border-radius: 7px;
+    padding: 7px 12px; font-size: 0.85rem; font-weight: 500;
+    cursor: pointer; outline: none;
+    min-width: 100px;
+  }
+  .select:hover { border-color: #484f58; }
+  .select:focus { border-color: var(--blue); }
+
+  main {
+    flex: 1; padding: 32px 28px;
+    max-width: 1200px; width: 100%; margin: 0 auto;
+    display: grid; grid-template-columns: 1.4fr 1fr; gap: 32px;
+  }
+  @media (max-width: 800px) {
+    main { grid-template-columns: 1fr; }
+  }
+
+  .chart-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 14px; padding: 24px;
+    display: flex; flex-direction: column;
+  }
+  .chart-title {
+    font-size: 0.78rem; color: var(--text2);
+    text-transform: uppercase; letter-spacing: .8px;
+    margin-bottom: 16px; font-weight: 600;
+  }
+  .chart-wrap {
+    position: relative; flex: 1;
+    min-height: 380px; display: flex; align-items: center; justify-content: center;
+  }
+  .chart-wrap.empty {
+    color: var(--text3); font-size: 0.9rem; text-align: center;
+  }
+
+  .stats {
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .total-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 14px; padding: 24px;
+    text-align: center;
+  }
+  .total-card .label {
+    font-size: 0.75rem; color: var(--text2);
+    text-transform: uppercase; letter-spacing: .8px; margin-bottom: 8px;
+  }
+  .total-card .value {
+    font-size: 2.5rem; font-weight: 700; color: var(--white); line-height: 1;
+  }
+  .total-card .sub-value { font-size: 0.75rem; color: var(--text3); margin-top: 6px; }
+
+  .legend-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 14px; padding: 20px;
+    max-height: 480px; overflow-y: auto;
+  }
+  .legend-card .label {
+    font-size: 0.75rem; color: var(--text2);
+    text-transform: uppercase; letter-spacing: .8px; margin-bottom: 14px;
+    font-weight: 600;
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 0; border-bottom: 1px solid rgba(33,38,45,.6);
+    font-size: 0.85rem;
+  }
+  .legend-item:last-child { border-bottom: none; }
+  .legend-color {
+    width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0;
+  }
+  .legend-text {
+    flex: 1; color: var(--text); overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+  .legend-count {
+    font-weight: 700; color: var(--white); min-width: 50px; text-align: right;
+  }
+  .legend-pct {
+    color: var(--text3); font-size: 0.75rem; min-width: 50px; text-align: right;
+  }
+  .legend-value {
+    font-weight: 700; color: #2E7D32; min-width: 90px; text-align: right;
+    font-variant-numeric: tabular-nums; font-size: 0.82rem;
+  }
+  .legend-card-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 14px; gap: 10px;
+  }
+  .checkbox-toggle {
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    font-size: 0.72rem; color: var(--text2); user-select: none;
+  }
+  .checkbox-toggle input { cursor: pointer; accent-color: #2E7D32; }
+  .checkbox-toggle:hover { color: var(--text); }
+
+  .loading-overlay {
+    position: absolute; inset: 0; background: rgba(13,17,23,.85);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 10; border-radius: 14px;
+  }
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border2); border-top-color: var(--blue);
+    border-radius: 50%; animation: spin .75s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-msg {
+    color: var(--red); padding: 16px; text-align: center;
+    background: rgba(248,81,73,.08); border: 1px solid rgba(248,81,73,.2);
+    border-radius: 10px; font-size: 0.85rem;
+  }
+
+  /* ── Top SKUs ── */
+  .topskus-section {
+    max-width: 1200px; margin: 0 auto 40px; padding: 0 28px;
+  }
+  .topskus-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 14px; padding: 24px;
+  }
+  .topskus-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 18px; flex-wrap: wrap; gap: 8px;
+  }
+  .topskus-header h2 {
+    font-size: 0.95rem; font-weight: 600; color: var(--white);
+  }
+  .topskus-header span {
+    font-size: 0.78rem; color: var(--text3);
+  }
+  .topskus-table {
+    width: 100%; border-collapse: collapse; font-size: 0.85rem;
+  }
+  .topskus-table th {
+    text-align: left; padding: 10px 12px; color: var(--text2);
+    text-transform: uppercase; letter-spacing: .6px;
+    font-size: 0.72rem; font-weight: 600;
+    border-bottom: 1px solid var(--border);
+  }
+  .topskus-table th.right, .topskus-table td.right { text-align: right; }
+  .topskus-table td {
+    padding: 11px 12px; color: var(--text);
+    border-bottom: 1px solid rgba(33,38,45,.6);
+  }
+  .topskus-table tr:last-child td { border-bottom: none; }
+  .topskus-table tr:hover td { background: rgba(33,38,45,.4); }
+  .topskus-table tbody tr.clickable { cursor: pointer; }
+  .topskus-table tbody tr.clickable:hover td { background: rgba(88,166,255,.08); }
+  .mini-bar { display: inline-block; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; vertical-align: middle; min-width: 80px; }
+  .mini-bar-fill { height: 100%; border-radius: 3px; }
+
+  /* Modal */
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: none; align-items: center; justify-content: center; z-index: 100; padding: 24px; }
+  .modal-backdrop.open { display: flex; }
+  .modal-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; max-width: 900px; width: 100%; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; }
+  .modal-header { padding: 18px 22px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .modal-header h3 { font-size: 1rem; color: var(--white); font-weight: 600; }
+  .modal-header .modal-sub { font-size: 0.78rem; color: var(--text3); margin-top: 2px; }
+  .modal-close { background: transparent; border: 1px solid var(--border2); color: var(--text2); width: 30px; height: 30px; border-radius: 6px; cursor: pointer; font-size: 1rem; display: inline-flex; align-items: center; justify-content: center; }
+  .modal-close:hover { background: var(--border2); color: var(--white); }
+  .modal-body { padding: 16px 22px 22px; overflow-y: auto; }
+  .modal-search { width: 100%; background: var(--bg); border: 1px solid var(--border2); color: var(--text); padding: 8px 12px; border-radius: 7px; font-size: 0.85rem; margin-bottom: 12px; outline: none; }
+  .modal-search:focus { border-color: var(--blue); }
+  .rank-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--border); color: var(--white);
+    font-weight: 700; font-size: 0.78rem;
+  }
+  .rank-badge.top1 { background: linear-gradient(135deg, #F9A825, #FF8F00); color: #000; }
+  .rank-badge.top2 { background: linear-gradient(135deg, #B0BEC5, #78909C); color: #000; }
+  .rank-badge.top3 { background: linear-gradient(135deg, #BF8970, #8D6E63); color: #fff; }
+  .sku-mono { font-family: 'Cascadia Code','Consolas',monospace; color: var(--white); font-weight: 600; }
+  .qtd-num { color: var(--white); font-weight: 700; }
+  .pct-bar-wrap { display: flex; align-items: center; gap: 8px; min-width: 120px; }
+  .pct-bar { flex: 1; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .pct-fill { height: 100%; background: linear-gradient(90deg, #1565C0, #6A1B9A); border-radius: 3px; }
+  .pct-num { font-size: 0.75rem; color: var(--text3); font-weight: 600; min-width: 40px; text-align: right; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <div class="logo">📊</div>
+    <div>
+      <h1>Tratativas — Análise por Status e SKU</h1>
+      <div class="sub">Distribuição de status + ranking de SKUs filtrável por mês/ano</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="filter-row">
+      <label>Mês:</label>
+      <select id="filtro-mes" class="select" onchange="processar()">
+        <option value="todos">Todos</option>
+      </select>
+      <label>Ano:</label>
+      <select id="filtro-ano" class="select" onchange="processar()">
+        <option value="todos">Todos</option>
+      </select>
+    </div>
+    <span class="ts-badge" id="ts-badge">—</span>
+    <button class="btn btn-primary" id="btn-refresh" onclick="carregar()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+      </svg>
+      Atualizar
+    </button>
+  </div>
+</header>
+
+<main>
+  <div class="chart-card">
+    <div class="chart-title">📈 Distribuição</div>
+    <div class="chart-wrap" id="chart-wrap">
+      <canvas id="pieChart"></canvas>
+      <div class="loading-overlay" id="loading"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="total-card">
+      <div class="label">Total de registros</div>
+      <div class="value" id="total-value">0</div>
+      <div class="sub-value" id="total-sub">— status únicos</div>
+    </div>
+    <div class="legend-card">
+      <div class="legend-card-header">
+        <div class="label" style="margin:0">Detalhamento</div>
+        <label class="checkbox-toggle">
+          <input type="checkbox" id="toggle-valores" onchange="processar()" />
+          R$ Mostrar valores
+        </label>
+      </div>
+      <div id="legend-list"></div>
+    </div>
+  </div>
+</main>
+
+<section class="topskus-section">
+  <div class="topskus-card">
+    <div class="topskus-header">
+      <h2>🏆 Top SKUs no período</h2>
+      <span id="topskus-info">—</span>
+    </div>
+    <div id="topskus-list"></div>
+  </div>
+</section>
+
+<div class="modal-backdrop" id="modal" onclick="if(event.target.id==='modal')fecharModal()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div>
+        <h3 id="modal-title">—</h3>
+        <div class="modal-sub" id="modal-sub"></div>
+      </div>
+      <button class="modal-close" onclick="fecharModal()" title="Fechar (Esc)">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="text" class="modal-search" id="modal-search" placeholder="Filtrar…" oninput="filtrarModal()" />
+      <div id="modal-content"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SHEET_ID = '1N96vFnm2gtZSpyP6-NqJRYgN3vMDb5XARej2AfwKKu0';
+  const SHEET_NAME = 'Tratativas';
+  const STATUS_COL_INDEX = 18; // coluna S (Status)
+  const DATA_COL_INDEX   = 3;  // coluna D (Registro - data da tratativa)
+  const SKU_COL_INDEX    = 5;  // coluna F (SKU)
+  const DESC_COL_INDEX   = 6;  // coluna G (Descrição)
+  const CUSTO_COL_INDEX  = 22; // coluna W (Custo)
+  const COL_K_INDEX      = 10; // coluna K
+  const APONT_COL_INDEX  = 11; // coluna L (Apontamento)
+  const LS_TOGGLE_VALORES = 'grafico_mostrar_valores';
+  const HEADER_ROW = 1;        // GVIZ já trata a 1ª linha como cabeçalho
+
+  const NOMES_MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  // Cache global das linhas carregadas (após carregar() do Google Sheets)
+  let dadosCache = [];
+  let filtradasCache = []; // últimas linhas após filtros (mês/ano), usadas pelos modais
+
+  // Extrai { ano, mes } de uma string como "Date(2026,1,23)" (mes é 0-indexed) ou "23/02/26"
+  function parseData(valor) {
+    if (!valor) return null;
+    const s = String(valor).trim();
+    let m = s.match(/^Date\((\d+),(\d+),(\d+)/);
+    if (m) {
+      return { ano: parseInt(m[1]), mes: parseInt(m[2]) }; // mes 0-indexed (já bate com nossos índices de array)
+    }
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (m) {
+      let ano = parseInt(m[3]);
+      if (ano < 100) ano += 2000;
+      return { ano, mes: parseInt(m[2]) - 1 };
+    }
+    return null;
+  }
+
+  // Paleta profissional (tons sóbrios estilo Material Design 700/800)
+  const PALETA = [
+    '#1565C0', // Blue 800
+    '#6A1B9A', // Purple 800
+    '#00838F', // Cyan 800
+    '#283593', // Indigo 800
+    '#AD1457', // Pink 800
+    '#EF6C00', // Orange 800
+    '#4527A0', // Deep Purple 800
+    '#558B2F', // Light Green 800
+    '#00695C', // Teal 800
+    '#5D4037', // Brown 700
+    '#3949AB', // Indigo 600
+    '#7B1FA2', // Purple 700
+    '#0277BD', // Light Blue 800
+    '#C2185B', // Pink 700
+    '#827717', // Lime 900
+    '#37474F', // Blue Grey 800
+  ];
+
+  // Cores fixas por status — versão profissional (Material 700/800)
+  const COR_VERDE     = '#2E7D32'; // Green 800 - sucesso
+  const COR_VERMELHA  = '#C62828'; // Red 800 - perda/problema
+  const COR_AZUL      = '#1565C0'; // Blue 800 - em andamento
+  const COR_AMARELA   = '#F9A825'; // Yellow 800 - alerta
+  const CORES_FIXAS = {
+    // Verde
+    'estoque':           COR_VERDE,
+    'gerou credito':     COR_VERDE,
+    'contestacao ganha': COR_VERDE,
+    // Azul
+    'cobrar retorno':    COR_AZUL,
+    'agendado':          COR_AZUL,
+    'proxima tratativa': COR_AZUL,
+    'status':            COR_AZUL,
+    // Vermelho
+    'outlet':            COR_VERMELHA,
+    'perda':             COR_VERMELHA,
+    // Amarelo
+    'vollekz':           COR_AMARELA,
+  };
+
+  function normalizar(s) {
+    return String(s || '').toLowerCase().trim()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos
+      .replace(/\s+/g, ' '); // normaliza qualquer whitespace (incl. NBSP) em espaço simples
+  }
+
+  function corParaStatus(status, fallbackIdx) {
+    const fixa = CORES_FIXAS[normalizar(status)];
+    if (fixa) return fixa;
+    return PALETA[fallbackIdx % PALETA.length];
+  }
+
+  let chart = null;
+
+  async function fetchSheet() {
+    const baseUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME)}`;
+    // Tenta fetch direto (funciona em http://)
+    try {
+      const res = await fetch(baseUrl);
+      if (res.ok) {
+        const text = await res.text();
+        return parseGvizFromString(text);
+      }
+    } catch {}
+    // Fallback JSONP (funciona em file://) — usa o callback padrão do GVIZ
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      const timer = setTimeout(() => { cleanup(); reject(new Error('Timeout — verifique sua conexão e se a planilha está pública')); }, 20000);
+      function cleanup() {
+        clearTimeout(timer);
+        if (script.parentNode) script.remove();
+        try { delete window.google.visualization.Query.setResponse; } catch {}
+      }
+      // O GVIZ chama google.visualization.Query.setResponse(json) por padrão
+      window.google = window.google || {};
+      window.google.visualization = window.google.visualization || {};
+      window.google.visualization.Query = window.google.visualization.Query || {};
+      window.google.visualization.Query.setResponse = function(json) {
+        cleanup();
+        try {
+          if (json.status === 'error') return reject(new Error(json.errors?.[0]?.message || 'Erro na planilha'));
+          const cols = (json.table.cols || []).map(c => c.label || c.id);
+          const rows = (json.table.rows || []).map(row =>
+            (row.c || []).map(cell => (cell && cell.v != null) ? String(cell.f ?? cell.v) : '')
+          );
+          resolve({ cols, rows });
+        } catch(e) { reject(e); }
+      };
+      script.onerror = () => { cleanup(); reject(new Error('Falha ao conectar com o Google Sheets')); };
+      script.src = baseUrl;
+      document.head.appendChild(script);
+    });
+  }
+
+  function parseGvizFromString(text) {
+    const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
+    if (json.status === 'error') throw new Error(json.errors?.[0]?.message || 'Erro na planilha');
+    const cols = (json.table.cols || []).map(c => c.label || c.id);
+    const rows = (json.table.rows || []).map(row =>
+      (row.c || []).map(cell => (cell && cell.v != null) ? String(cell.f ?? cell.v) : '')
+    );
+    return { cols, rows };
+  }
+
+  async function carregar() {
+    const btn = document.getElementById('btn-refresh');
+    const loading = document.getElementById('loading');
+    btn.disabled = true;
+    loading.style.display = 'flex';
+
+    try {
+      const { rows } = await fetchSheet();
+      // Cacheia tudo após o cabeçalho (linha 4 → GVIZ já pula a primeira)
+      dadosCache = rows.slice(HEADER_ROW - 1);
+      popularFiltros();
+      processar();
+      document.getElementById('ts-badge').textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR');
+    } catch (e) {
+      console.error(e);
+      document.getElementById('chart-wrap').innerHTML =
+        `<div class="error-msg">Erro ao carregar: ${e.message}</div>`;
+    } finally {
+      btn.disabled = false;
+      const l = document.getElementById('loading');
+      if (l) l.style.display = 'none';
+    }
+  }
+
+  function popularFiltros() {
+    const anos = new Set();
+    const mesesPorAno = {}; // ano -> Set de meses
+    for (const row of dadosCache) {
+      const d = parseData(row[DATA_COL_INDEX]);
+      if (!d) continue;
+      anos.add(d.ano);
+      if (!mesesPorAno[d.ano]) mesesPorAno[d.ano] = new Set();
+      mesesPorAno[d.ano].add(d.mes);
+    }
+    const anosOrdenados = [...anos].sort((a, b) => b - a); // mais recente primeiro
+
+    // Popula select de ano (preserva seleção atual se ainda existir)
+    const selAno = document.getElementById('filtro-ano');
+    const anoAtual = selAno.value;
+    selAno.innerHTML = '<option value="todos">Todos</option>' +
+      anosOrdenados.map(a => `<option value="${a}">${a}</option>`).join('');
+    if (anosOrdenados.includes(parseInt(anoAtual))) selAno.value = anoAtual;
+
+    // Popula select de mês (todos os meses 1-12; mostramos só os que têm dados em algum ano)
+    const todosMeses = new Set();
+    for (const ano of anos) for (const m of mesesPorAno[ano]) todosMeses.add(m);
+    const mesesOrdenados = [...todosMeses].sort((a, b) => a - b);
+
+    const selMes = document.getElementById('filtro-mes');
+    const mesAtual = selMes.value;
+    selMes.innerHTML = '<option value="todos">Todos</option>' +
+      mesesOrdenados.map(m => `<option value="${m}">${NOMES_MESES[m]}</option>`).join('');
+    if (mesesOrdenados.includes(parseInt(mesAtual))) selMes.value = mesAtual;
+  }
+
+  function processar() {
+    if (!dadosCache.length) return;
+
+    const filtroAno = document.getElementById('filtro-ano').value;
+    const filtroMes = document.getElementById('filtro-mes').value;
+    const fAno = filtroAno === 'todos' ? null : parseInt(filtroAno);
+    const fMes = filtroMes === 'todos' ? null : parseInt(filtroMes);
+
+    // Aplica filtro por ano/mês
+    const filtradas = dadosCache.filter(row => {
+      if (fAno === null && fMes === null) return true;
+      const d = parseData(row[DATA_COL_INDEX]);
+      if (!d) return false; // sem data = ignora se houver filtro
+      if (fAno !== null && d.ano !== fAno) return false;
+      if (fMes !== null && d.mes !== fMes) return false;
+      return true;
+    });
+
+    // Conta ocorrências de cada status (coluna S) e soma valores (coluna W)
+    const contagens = {};
+    const valoresPorStatus = {};
+    let semStatus = 0;
+    let total = 0;
+    let totalValor = 0;
+    for (const row of filtradas) {
+      const status = (row[STATUS_COL_INDEX] || '').trim();
+      if (!status) { semStatus++; continue; }
+      contagens[status] = (contagens[status] || 0) + 1;
+      const v = parseValorBr(row[CUSTO_COL_INDEX]);
+      valoresPorStatus[status] = (valoresPorStatus[status] || 0) + v;
+      totalValor += v;
+      total++;
+    }
+
+    // Ordem dos grupos de cor (para manter cores iguais agrupadas no gráfico)
+    const ORDEM_CORES = [COR_VERDE, COR_AZUL, COR_AMARELA, COR_VERMELHA];
+    function grupoCor(status) {
+      const fixa = CORES_FIXAS[normalizar(status)];
+      if (!fixa) return ORDEM_CORES.length + 1; // sem cor fixa vai por último
+      const idx = ORDEM_CORES.indexOf(fixa);
+      return idx >= 0 ? idx : ORDEM_CORES.length;
+    }
+
+    const entries = Object.entries(contagens).sort((a, b) => {
+      const ga = grupoCor(a[0]);
+      const gb = grupoCor(b[0]);
+      if (ga !== gb) return ga - gb;       // mesmo grupo de cor fica junto
+      return b[1] - a[1];                  // dentro do grupo, maior primeiro
+    });
+    const labels = entries.map(e => e[0]);
+    const data = entries.map(e => e[1]);
+    let fallbackIdx = 0;
+    const colors = labels.map(l => {
+      const fixa = CORES_FIXAS[normalizar(l)];
+      if (fixa) return fixa;
+      return PALETA[fallbackIdx++ % PALETA.length];
+    });
+
+    const valores = labels.map(l => valoresPorStatus[l] || 0);
+    const toggle = document.getElementById('toggle-valores');
+    const mostrarValores = toggle && toggle.checked;
+    try { localStorage.setItem(LS_TOGGLE_VALORES, mostrarValores ? '1' : '0'); } catch {}
+
+    renderChart(labels, data, colors);
+    renderLegend(labels, data, colors, total, valores, mostrarValores);
+
+    document.getElementById('total-value').textContent = total.toLocaleString('pt-BR');
+    let subInfo = `${labels.length} status únicos`;
+    if (mostrarValores && totalValor > 0) subInfo += ` · ${formatBRL(totalValor)}`;
+    if (semStatus > 0) subInfo += ` · ${semStatus} sem status`;
+    if (fAno !== null || fMes !== null) {
+      const periodo = (fMes !== null ? NOMES_MESES[fMes] : 'Todos os meses') +
+                      (fAno !== null ? ` / ${fAno}` : '');
+      subInfo += ` · ${periodo}`;
+    }
+    document.getElementById('total-sub').textContent = subInfo;
+
+    // Top SKUs do período
+    filtradasCache = filtradas;
+    renderTopSkus(filtradas, fAno, fMes);
+  }
+
+  function renderTopSkus(rows, fAno, fMes) {
+    const contagens = {};
+    for (const row of rows) {
+      const sku = String(row[SKU_COL_INDEX] || '').trim();
+      if (!sku) continue;
+      const desc = String(row[DESC_COL_INDEX] || '').trim();
+      if (!contagens[sku]) contagens[sku] = { sku, desc, qtd: 0 };
+      contagens[sku].qtd++;
+      // Mantém a descrição mais recente caso varie
+      if (desc) contagens[sku].desc = desc;
+    }
+    const lista = Object.values(contagens).sort((a, b) => b.qtd - a.qtd);
+    const top = lista.slice(0, 20);
+    const totalOcorrencias = lista.reduce((s, x) => s + x.qtd, 0);
+
+    const info = document.getElementById('topskus-info');
+    let label = `${lista.length} SKUs únicos`;
+    if (fAno !== null || fMes !== null) {
+      const periodo = (fMes !== null ? NOMES_MESES[fMes] : 'Todos os meses') +
+                      (fAno !== null ? ` / ${fAno}` : '');
+      label += ` · ${periodo}`;
+    } else {
+      label += ' · Período: todos';
+    }
+    info.textContent = label;
+
+    const container = document.getElementById('topskus-list');
+    if (top.length === 0) {
+      container.innerHTML = '<div style="color:var(--text3);text-align:center;padding:24px;font-size:0.85rem">Nenhum SKU no período selecionado.</div>';
+      return;
+    }
+
+    const linhas = top.map((it, i) => {
+      const pct = totalOcorrencias > 0 ? (it.qtd / totalOcorrencias) * 100 : 0;
+      const rankClass = i === 0 ? 'top1' : i === 1 ? 'top2' : i === 2 ? 'top3' : '';
+      const skuAttr = escapeHtml(it.sku).replace(/'/g, "&#39;");
+      return `<tr class="clickable" onclick="abrirModalSkuDetalhes('${skuAttr}')" title="Clique para ver os status deste SKU">
+        <td style="width:48px"><div class="rank-badge ${rankClass}">${i + 1}</div></td>
+        <td class="sku-mono">${escapeHtml(it.sku)}</td>
+        <td>${escapeHtml(it.desc || '—')}</td>
+        <td class="right qtd-num">${it.qtd.toLocaleString('pt-BR')}</td>
+        <td>
+          <div class="pct-bar-wrap">
+            <div class="pct-bar"><div class="pct-fill" style="width:${pct.toFixed(1)}%"></div></div>
+            <div class="pct-num">${pct.toFixed(1)}%</div>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+
+    container.innerHTML = `
+      <table class="topskus-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>SKU</th>
+            <th>Descrição</th>
+            <th class="right">Ocorrências</th>
+            <th>% do total</th>
+          </tr>
+        </thead>
+        <tbody>${linhas}</tbody>
+      </table>
+      ${lista.length > 20 ? `<div style="text-align:center;color:var(--text3);font-size:0.78rem;margin-top:14px">Mostrando os 20 primeiros de ${lista.length} SKUs</div>` : ''}
+    `;
+  }
+
+  function renderChart(labels, data, colors) {
+    if (chart) chart.destroy();
+    const ctx = document.getElementById('pieChart').getContext('2d');
+    chart = new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels,
+        datasets: [{
+          data,
+          backgroundColor: colors,
+          borderColor: '#0d1117',
+          borderWidth: 2,
+          hoverOffset: 14,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { animateRotate: true, animateScale: true, duration: 800 },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#161b22',
+            borderColor: '#30363d',
+            borderWidth: 1,
+            titleColor: '#f0f6fc',
+            bodyColor: '#c9d1d9',
+            padding: 12,
+            callbacks: {
+              label: (ctx) => {
+                const total = ctx.dataset.data.reduce((s, v) => s + v, 0);
+                const pct = ((ctx.parsed / total) * 100).toFixed(1);
+                return `${ctx.label}: ${ctx.parsed} (${pct}%)`;
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  function renderLegend(labels, data, colors, total, valores, mostrarValores) {
+    const list = document.getElementById('legend-list');
+    list.innerHTML = labels.map((label, i) => {
+      const pct = total > 0 ? ((data[i] / total) * 100).toFixed(1) : 0;
+      const valHtml = mostrarValores
+        ? `<div class="legend-value">${formatBRL(valores[i] || 0)}</div>`
+        : '';
+      return `
+        <div class="legend-item">
+          <div class="legend-color" style="background:${colors[i]}"></div>
+          <div class="legend-text" title="${escapeHtml(label)}">${escapeHtml(label)}</div>
+          <div class="legend-count">${data[i].toLocaleString('pt-BR')}</div>
+          <div class="legend-pct">${pct}%</div>
+          ${valHtml}
+        </div>`;
+    }).join('');
+  }
+
+  // Converte valor da planilha (pode vir como "R$ 123,45", "123.45", "123,45", number) em Number
+  function parseValorBr(v) {
+    if (v == null || v === '') return 0;
+    if (typeof v === 'number') return v;
+    let s = String(v).trim();
+    if (!s) return 0;
+    // Remove "R$", espaços e separadores de milhar; troca vírgula decimal por ponto
+    s = s.replace(/[R$\s ]/g, '');
+    if (s.indexOf(',') >= 0) {
+      s = s.replace(/\./g, '').replace(',', '.');
+    }
+    const n = parseFloat(s);
+    return isNaN(n) ? 0 : n;
+  }
+
+  function formatBRL(n) {
+    return 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, m => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[m]));
+  }
+
+  // ── MODAL ────────────────────────────────────────────────────────────────
+  function abrirModal(titulo, sub, html) {
+    document.getElementById('modal-title').textContent = titulo;
+    document.getElementById('modal-sub').textContent = sub;
+    document.getElementById('modal-content').innerHTML = html;
+    document.getElementById('modal-search').value = '';
+    document.getElementById('modal').classList.add('open');
+  }
+  function fecharModal() { document.getElementById('modal').classList.remove('open'); }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharModal(); });
+
+  function filtrarModal() {
+    const q = document.getElementById('modal-search').value.toLowerCase().trim();
+    const linhas = document.querySelectorAll('#modal-content tbody tr');
+    linhas.forEach(tr => {
+      const txt = tr.textContent.toLowerCase();
+      tr.style.display = (!q || txt.includes(q)) ? '' : 'none';
+    });
+  }
+
+  function abrirModalSkuDetalhes(sku) {
+    // Decodifica entidades HTML que vieram do atributo
+    const tmp = document.createElement('textarea');
+    tmp.innerHTML = sku;
+    const skuKey = tmp.value;
+
+    // Filtra as linhas filtradas pelo SKU
+    const linhasSku = filtradasCache.filter(row => {
+      return String(row[SKU_COL_INDEX] || '').trim() === skuKey;
+    });
+
+    if (linhasSku.length === 0) {
+      abrirModal('Detalhes do SKU', skuKey, '<div style="color:var(--text3);text-align:center;padding:24px">Nenhuma tratativa encontrada para este SKU.</div>');
+      return;
+    }
+
+    // Pega descrição mais recente
+    const desc = linhasSku.reduce((d, r) => String(r[DESC_COL_INDEX] || '').trim() || d, '—');
+
+    // 1) Agrupa por status (somando custo)
+    const statusMap = {};
+    let totalCusto = 0;
+    for (const row of linhasSku) {
+      const status = String(row[STATUS_COL_INDEX] || '').trim() || '(sem status)';
+      const v = parseValorBr(row[CUSTO_COL_INDEX]);
+      totalCusto += v;
+      if (!statusMap[status]) statusMap[status] = { qtd: 0, custo: 0 };
+      statusMap[status].qtd++;
+      statusMap[status].custo += v;
+    }
+    const statusOrdenados = Object.entries(statusMap).sort((a, b) => b[1].qtd - a[1].qtd);
+    const totalQtd = linhasSku.length;
+
+    const linhasStatus = statusOrdenados.map(([s, info]) => {
+      const pct = totalQtd > 0 ? (info.qtd / totalQtd * 100) : 0;
+      const cor = CORES_FIXAS[normalizar(s)] || '#6e7681';
+      return `<tr>
+        <td><span style="display:inline-flex;align-items:center;gap:8px"><span style="width:11px;height:11px;border-radius:3px;background:${cor};display:inline-block"></span>${escapeHtml(s)}</span></td>
+        <td class="right qtd-num">${info.qtd.toLocaleString('pt-BR')}</td>
+        <td class="right" style="color:var(--text3)">${pct.toFixed(1)}%</td>
+        <td class="right" style="color:#2E7D32;font-weight:700;font-variant-numeric:tabular-nums">${formatBRL(info.custo)}</td>
+        <td><span class="mini-bar"><span class="mini-bar-fill" style="width:${pct.toFixed(1)}%;background:${cor}"></span></span></td>
+      </tr>`;
+    }).join('');
+
+    // 2) Lista de tratativas individuais ordenadas por data (mais recente primeiro)
+    function dataOrdKey(row) {
+      const d = parseData(row[DATA_COL_INDEX]);
+      return d ? d.ano * 100 + d.mes : 0;
+    }
+    const linhasInd = linhasSku
+      .slice()
+      .sort((a, b) => dataOrdKey(b) - dataOrdKey(a))
+      .map(row => {
+        const status = String(row[STATUS_COL_INDEX] || '').trim() || '—';
+        const cor = CORES_FIXAS[normalizar(status)] || '#6e7681';
+        const v = parseValorBr(row[CUSTO_COL_INDEX]);
+        const apont = String(row[APONT_COL_INDEX] || '').trim();
+        const colK  = String(row[COL_K_INDEX] || '').trim();
+        return `<tr>
+          <td>${escapeHtml(formatarDataTratativa(row[DATA_COL_INDEX]))}</td>
+          <td><span style="display:inline-flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border-radius:50%;background:${cor};display:inline-block"></span>${escapeHtml(status)}</span></td>
+          <td style="color:var(--text);white-space:normal;line-height:1.35">${escapeHtml(colK) || '<span style="color:var(--text3)">—</span>'}</td>
+          <td style="color:var(--text2);max-width:340px;white-space:normal;line-height:1.35">${escapeHtml(apont) || '<span style="color:var(--text3)">—</span>'}</td>
+          <td class="right" style="color:#2E7D32;font-weight:600;font-variant-numeric:tabular-nums">${v > 0 ? formatBRL(v) : '—'}</td>
+        </tr>`;
+      }).join('');
+
+    const cabecalho = `
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:18px">
+        <div style="font-size:0.72rem;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">SKU</div>
+        <div style="color:var(--white);font-weight:600;margin-bottom:4px"><span class="sku-mono">${escapeHtml(skuKey)}</span></div>
+        <div style="font-size:0.85rem;color:var(--text);margin-bottom:6px">${escapeHtml(desc || '—')}</div>
+        <div style="font-size:0.78rem;color:var(--text3)">Total: <strong style="color:var(--white)">${totalQtd.toLocaleString('pt-BR')}</strong> tratativa${totalQtd>1?'s':''} · <strong style="color:#2E7D32">${formatBRL(totalCusto)}</strong> em custos</div>
+      </div>`;
+
+    const secaoStatus = `
+      <div style="font-size:0.78rem;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;font-weight:600">📊 Status deste SKU</div>
+      <table class="topskus-table" style="margin-bottom:24px">
+        <thead><tr><th>Status</th><th class="right">Qtd</th><th class="right">%</th><th class="right">Custo total</th><th></th></tr></thead>
+        <tbody>${linhasStatus}</tbody>
+      </table>`;
+
+    const secaoInd = `
+      <div style="font-size:0.78rem;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;font-weight:600">📋 Tratativas individuais (${totalQtd})</div>
+      <table class="topskus-table">
+        <thead><tr><th>Data</th><th>Status</th><th>Coluna K</th><th>Apontamento</th><th class="right">Custo</th></tr></thead>
+        <tbody>${linhasInd}</tbody>
+      </table>`;
+
+    abrirModal(
+      'Detalhes do SKU',
+      `${statusOrdenados.length} status distinto(s) · ${totalQtd.toLocaleString('pt-BR')} tratativa(s)`,
+      cabecalho + secaoStatus + secaoInd
+    );
+  }
+
+  function formatarDataTratativa(v) {
+    if (!v) return '—';
+    const s = String(v).trim();
+    let m = s.match(/^Date\((\d+),(\d+),(\d+)/);
+    if (m) {
+      const ano = +m[1], mes = +m[2] + 1, dia = +m[3];
+      return `${String(dia).padStart(2,'0')}/${String(mes).padStart(2,'0')}/${ano}`;
+    }
+    return s;
+  }
+
+  // Restaura preferência do checkbox de valores
+  try {
+    const salvo = localStorage.getItem(LS_TOGGLE_VALORES);
+    if (salvo === '1') document.getElementById('toggle-valores').checked = true;
+  } catch {}
+
+  // Carrega ao abrir
+  carregar();
+</script>
+</body>
+</html>
