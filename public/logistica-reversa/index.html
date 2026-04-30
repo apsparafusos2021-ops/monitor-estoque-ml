@@ -84,8 +84,11 @@
 
   .legend-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 20px; max-height: 480px; overflow-y: auto; }
   .legend-card .label { font-size: 0.75rem; color: var(--text2); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 14px; font-weight: 600; }
-  .legend-item { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(33,38,45,.6); font-size: 0.85rem; }
+  .legend-item { display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-bottom: 1px solid rgba(33,38,45,.6); font-size: 0.85rem; cursor: pointer; border-radius: 6px; transition: background .12s; }
   .legend-item:last-child { border-bottom: none; }
+  .legend-item:hover { background: rgba(88,166,255,.08); }
+  .legend-item::after { content: '↗'; color: var(--text3); font-size: 0.75rem; opacity: 0; transition: opacity .12s; margin-left: 4px; }
+  .legend-item:hover::after { opacity: 1; color: var(--blue); }
   .legend-color { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
   .legend-text { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .legend-count { font-weight: 700; color: var(--white); min-width: 50px; text-align: right; }
@@ -869,13 +872,107 @@
     }
     list.innerHTML = labels.map((label, i) => {
       const pct = total > 0 ? ((data[i] / total) * 100).toFixed(1) : '0.0';
-      return `<div class="legend-item">
+      const lblAttr = escapeHtml(label).replace(/'/g, '&#39;');
+      return `<div class="legend-item" onclick="abrirModalMotivoDetalhes('${lblAttr}')" title="Clique para ver os itens deste status">
         <div class="legend-color" style="background:${colors[i]}"></div>
-        <div class="legend-text" title="${escapeHtml(label)}">${escapeHtml(label)}</div>
+        <div class="legend-text">${escapeHtml(label)}</div>
         <div class="legend-count">${data[i].toLocaleString('pt-BR')}</div>
         <div class="legend-pct">${pct}%</div>
       </div>`;
     }).join('');
+  }
+
+  // Modal: detalhes de um status/motivo específico (item da legenda)
+  function abrirModalMotivoDetalhes(motivo) {
+    const tmp = document.createElement('textarea');
+    tmp.innerHTML = motivo;
+    const motivoKey = tmp.value;
+
+    const linhasMotivo = filtradasCache.filter(row => getMotivo(row) === motivoKey);
+    if (linhasMotivo.length === 0) {
+      abrirModal('Detalhes do status', motivoKey, '<div style="color:var(--text3);text-align:center;padding:24px">Nenhum item encontrado.</div>');
+      return;
+    }
+
+    let totalQtd = 0;
+    const produtos = {};
+    const canais = {};
+    for (const row of linhasMotivo) {
+      const q = parseQtd(row[QTD_COL]);
+      totalQtd += q;
+      const sku = (row[SKU_COL] || '').trim();
+      const desc = (row[DESC_COL] || '').trim();
+      const key = sku || desc || '(sem produto)';
+      if (!produtos[key]) produtos[key] = { sku, desc, qtd: 0 };
+      produtos[key].qtd += q;
+      const c = (row[ORIGEM_COL] || '').trim() || '(sem canal)';
+      canais[c] = (canais[c] || 0) + q;
+    }
+
+    const cor = CORES_FIXAS[normalizar(motivoKey)] || '#6e7681';
+
+    // Resumo: top 5 produtos + canais
+    const topProdutos = Object.values(produtos).sort((a, b) => b.qtd - a.qtd).slice(0, 5);
+    const linhasCanais = Object.entries(canais).sort((a, b) => b[1] - a[1]).map(([c, q]) => {
+      const pct = totalQtd > 0 ? (q / totalQtd * 100).toFixed(1) : '0.0';
+      return `<tr><td>${escapeHtml(c)}</td><td class="right qtd-num">${q}</td><td class="right" style="color:var(--text3)">${pct}%</td></tr>`;
+    }).join('');
+    const linhasTopProd = topProdutos.map((p, i) => `
+      <tr>
+        <td style="width:36px">${i + 1}</td>
+        <td class="sku-mono">${escapeHtml(p.sku || '—')}</td>
+        <td class="desc-cell">${escapeHtml(p.desc || '—')}</td>
+        <td class="right qtd-num">${p.qtd}</td>
+      </tr>`).join('');
+
+    // Lista de itens individuais (todas as linhas)
+    const linhasInd = linhasMotivo
+      .slice()
+      .sort((a, b) => String(b[DATA_COL] || '').localeCompare(String(a[DATA_COL] || '')))
+      .map(row => `<tr>
+        <td>${escapeHtml(formatarData(row[DATA_COL]))}</td>
+        <td class="sku-mono">${escapeHtml((row[VENDA_COL] || '').trim() || '—')}</td>
+        <td>${escapeHtml((row[ORIGEM_COL] || '').trim() || '—')}</td>
+        <td class="sku-mono">${escapeHtml((row[SKU_COL] || '').trim() || '—')}</td>
+        <td>${escapeHtml((row[DESC_COL] || '').trim() || '—')}</td>
+        <td>${escapeHtml((row[CLIENTE_COL] || '').trim() || '—')}</td>
+        <td class="right qtd-num">${parseQtd(row[QTD_COL])}</td>
+        <td style="color:var(--text3);max-width:280px">${escapeHtml((row[16] || '').trim())}</td>
+      </tr>`).join('');
+
+    const cabecalho = `
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:18px;border-left:4px solid ${cor}">
+        <div style="font-size:0.72rem;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">Status / Motivo</div>
+        <div style="color:var(--white);font-weight:600;font-size:1.05rem;margin-bottom:6px">${escapeHtml(motivoKey)}</div>
+        <div style="font-size:0.78rem;color:var(--text3)">Total: <strong style="color:var(--white)">${totalQtd.toLocaleString('pt-BR')}</strong> item(ns) · <strong style="color:var(--white)">${linhasMotivo.length}</strong> linha(s) · <strong style="color:var(--white)">${Object.keys(produtos).length}</strong> produto(s) distinto(s)</div>
+      </div>`;
+
+    const secaoCanais = `
+      <div style="font-size:0.78rem;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;font-weight:600">🏷️ Por canal</div>
+      <table class="topp-table" style="margin-bottom:20px">
+        <thead><tr><th>Canal</th><th class="right">Qtd</th><th class="right">%</th></tr></thead>
+        <tbody>${linhasCanais}</tbody>
+      </table>`;
+
+    const secaoTopProd = topProdutos.length > 0 ? `
+      <div style="font-size:0.78rem;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;font-weight:600">🏆 Top 5 produtos com este status</div>
+      <table class="topp-table" style="margin-bottom:20px">
+        <thead><tr><th>#</th><th>SKU</th><th>Descrição</th><th class="right">Qtd</th></tr></thead>
+        <tbody>${linhasTopProd}</tbody>
+      </table>` : '';
+
+    const secaoInd = `
+      <div style="font-size:0.78rem;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;font-weight:600">📋 Itens individuais (${linhasMotivo.length})</div>
+      <table class="topp-table">
+        <thead><tr><th>Data</th><th>Venda</th><th>Canal</th><th>SKU</th><th>Descrição</th><th>Cliente</th><th class="right">Qtd</th><th>OBS Produto</th></tr></thead>
+        <tbody>${linhasInd}</tbody>
+      </table>`;
+
+    abrirModal(
+      'Detalhes do status',
+      `${linhasMotivo.length} linha(s) · ${totalQtd.toLocaleString('pt-BR')} item(ns) · ${Object.keys(canais).length} canal(is)`,
+      cabecalho + secaoCanais + secaoTopProd + secaoInd
+    );
   }
 
   function renderTopProdutos(rows, fAno, fMes) {

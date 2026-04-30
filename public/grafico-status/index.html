@@ -128,10 +128,14 @@
   }
   .legend-item {
     display: flex; align-items: center; gap: 12px;
-    padding: 10px 0; border-bottom: 1px solid rgba(33,38,45,.6);
-    font-size: 0.85rem;
+    padding: 10px 8px; border-bottom: 1px solid rgba(33,38,45,.6);
+    font-size: 0.85rem; cursor: pointer; border-radius: 6px;
+    transition: background .12s;
   }
   .legend-item:last-child { border-bottom: none; }
+  .legend-item:hover { background: rgba(88,166,255,.08); }
+  .legend-item::after { content: '↗'; color: var(--text3); font-size: 0.75rem; opacity: 0; transition: opacity .12s; margin-left: 4px; }
+  .legend-item:hover::after { opacity: 1; color: var(--blue); }
   .legend-color {
     width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0;
   }
@@ -726,15 +730,104 @@
       const valHtml = mostrarValores
         ? `<div class="legend-value">${formatBRL(valores[i] || 0)}</div>`
         : '';
+      const lblAttr = escapeHtml(label).replace(/'/g, '&#39;');
       return `
-        <div class="legend-item">
+        <div class="legend-item" onclick="abrirModalStatusDetalhes('${lblAttr}')" title="Clique para ver as tratativas com este status">
           <div class="legend-color" style="background:${colors[i]}"></div>
-          <div class="legend-text" title="${escapeHtml(label)}">${escapeHtml(label)}</div>
+          <div class="legend-text">${escapeHtml(label)}</div>
           <div class="legend-count">${data[i].toLocaleString('pt-BR')}</div>
           <div class="legend-pct">${pct}%</div>
           ${valHtml}
         </div>`;
     }).join('');
+  }
+
+  // Modal: detalhes de um status específico (clique no detalhamento)
+  function abrirModalStatusDetalhes(status) {
+    const tmp = document.createElement('textarea');
+    tmp.innerHTML = status;
+    const statusKey = tmp.value;
+
+    const linhasStatus = filtradasCache.filter(row =>
+      String(row[STATUS_COL_INDEX] || '').trim() === statusKey
+    );
+    if (linhasStatus.length === 0) {
+      abrirModal('Detalhes do status', statusKey, '<div style="color:var(--text3);text-align:center;padding:24px">Nenhuma tratativa encontrada.</div>');
+      return;
+    }
+
+    const cor = CORES_FIXAS[normalizar(statusKey)] || '#6e7681';
+    let totalCusto = 0;
+    const skuMap = {};
+    for (const row of linhasStatus) {
+      totalCusto += parseValorBr(row[CUSTO_COL_INDEX]);
+      const sku = String(row[SKU_COL_INDEX] || '').trim();
+      const desc = String(row[DESC_COL_INDEX] || '').trim();
+      const key = sku || desc || '(sem produto)';
+      if (!skuMap[key]) skuMap[key] = { sku, desc, qtd: 0, custo: 0 };
+      skuMap[key].qtd++;
+      skuMap[key].custo += parseValorBr(row[CUSTO_COL_INDEX]);
+      if (desc && !skuMap[key].desc) skuMap[key].desc = desc;
+    }
+    const topSkus = Object.values(skuMap).sort((a, b) => b.qtd - a.qtd).slice(0, 10);
+
+    function dataOrdKey(row) {
+      const d = parseData(row[DATA_COL_INDEX]);
+      return d ? d.ano * 10000 + d.mes * 100 : 0;
+    }
+
+    const linhasTopSku = topSkus.map((s, i) => `
+      <tr>
+        <td style="width:36px">${i + 1}</td>
+        <td class="sku-mono">${escapeHtml(s.sku || '—')}</td>
+        <td>${escapeHtml(s.desc || '—')}</td>
+        <td class="right qtd-num">${s.qtd}</td>
+        <td class="right" style="color:#2E7D32;font-weight:600">${s.custo > 0 ? formatBRL(s.custo) : '—'}</td>
+      </tr>`).join('');
+
+    const linhasInd = linhasStatus
+      .slice()
+      .sort((a, b) => dataOrdKey(b) - dataOrdKey(a))
+      .map(row => {
+        const v = parseValorBr(row[CUSTO_COL_INDEX]);
+        const apont = String(row[APONT_COL_INDEX] || '').trim();
+        const colK  = String(row[COL_K_INDEX] || '').trim();
+        return `<tr>
+          <td>${escapeHtml(formatarDataTratativa(row[DATA_COL_INDEX]))}</td>
+          <td class="sku-mono">${escapeHtml(String(row[SKU_COL_INDEX] || '').trim() || '—')}</td>
+          <td>${escapeHtml(String(row[DESC_COL_INDEX] || '').trim() || '—')}</td>
+          <td style="color:var(--text);white-space:normal;line-height:1.35">${escapeHtml(colK) || '<span style="color:var(--text3)">—</span>'}</td>
+          <td style="color:var(--text2);max-width:300px;white-space:normal;line-height:1.35">${escapeHtml(apont) || '<span style="color:var(--text3)">—</span>'}</td>
+          <td class="right" style="color:#2E7D32;font-weight:600">${v > 0 ? formatBRL(v) : '—'}</td>
+        </tr>`;
+      }).join('');
+
+    const cabecalho = `
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:18px;border-left:4px solid ${cor}">
+        <div style="font-size:0.72rem;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">Status</div>
+        <div style="color:var(--white);font-weight:600;font-size:1.05rem;margin-bottom:6px">${escapeHtml(statusKey)}</div>
+        <div style="font-size:0.78rem;color:var(--text3)">Total: <strong style="color:var(--white)">${linhasStatus.length.toLocaleString('pt-BR')}</strong> tratativa(s) · <strong style="color:#2E7D32">${formatBRL(totalCusto)}</strong> em custos · <strong style="color:var(--white)">${Object.keys(skuMap).length}</strong> SKU(s) distinto(s)</div>
+      </div>`;
+
+    const secaoTopSku = `
+      <div style="font-size:0.78rem;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;font-weight:600">🏆 Top 10 SKUs com este status</div>
+      <table class="topskus-table" style="margin-bottom:24px">
+        <thead><tr><th>#</th><th>SKU</th><th>Descrição</th><th class="right">Qtd</th><th class="right">Custo</th></tr></thead>
+        <tbody>${linhasTopSku}</tbody>
+      </table>`;
+
+    const secaoInd = `
+      <div style="font-size:0.78rem;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;font-weight:600">📋 Tratativas individuais (${linhasStatus.length})</div>
+      <table class="topskus-table">
+        <thead><tr><th>Data</th><th>SKU</th><th>Descrição</th><th>Coluna K</th><th>Apontamento</th><th class="right">Custo</th></tr></thead>
+        <tbody>${linhasInd}</tbody>
+      </table>`;
+
+    abrirModal(
+      'Detalhes do status',
+      `${linhasStatus.length} tratativa(s) · ${formatBRL(totalCusto)} em custos`,
+      cabecalho + secaoTopSku + secaoInd
+    );
   }
 
   // Converte valor da planilha (pode vir como "R$ 123,45", "123.45", "123,45", number) em Number
