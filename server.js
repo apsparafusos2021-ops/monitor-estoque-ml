@@ -674,6 +674,25 @@ function gerarBlocoZpl4x25(inventoryId, title, sku) {
 `;
 }
 
+// Meio bloco 4x2.5 — preenche só a etiqueta da ESQUERDA (direita fica em branco).
+// Usado quando a quantidade total de etiquetas é ímpar pra evitar imprimir 1 a mais.
+function gerarMeioBlocoZpl4x25(inventoryId, title, sku) {
+  const tituloEnc = encodeZplText(title);
+  const skuEnc = encodeZplText(`SKU: ${sku || ''}`);
+  return `^XA^CI28
+^LH0,0
+^FO30,15^BY2,,0^BCN,54,N,N^FD${inventoryId}^FS
+^FO105,75^A0N,20,25^FH^FD${inventoryId}^FS
+^FO105,76^A0N,20,25^FH^FD${inventoryId}^FS
+^FO16,115^A0N,18,18^FB300,2,2,L^FH^FD${tituloEnc}^FS
+^FO16,153^A0N,18,18^FB300,1,0,L^FH^FD^FS
+^FO15,153^A0N,18,18^FB300,1,0,L^FH^FD^FS
+^FO16,172^A0N,18,18^FH^FD${skuEnc}
+^FS
+^XZ
+`;
+}
+
 // Gera 1 bloco ZPL com 1 etiqueta 8x5cm (formato grande do ML)
 // 8cm x 5cm a 203dpi = ~640 x ~400 dots
 function gerarBlocoZpl8x5(inventoryId, title, sku) {
@@ -694,15 +713,33 @@ function gerarBlocoZpl8x5(inventoryId, title, sku) {
 
 app.post('/api/generate-zpl', (req, res) => {
   try {
-    const { inventoryId, title, sku, linhas, tamanho } = req.body || {};
+    const { inventoryId, title, sku, linhas, etiquetas, tamanho } = req.body || {};
     if (!inventoryId) return res.status(400).json({ error: 'inventoryId obrigatório' });
-    const n = Math.max(1, Math.min(500, parseInt(linhas) || 1));
     const formato = (tamanho === '8x5') ? '8x5' : '4x2.5';
-    const gerar = formato === '8x5' ? gerarBlocoZpl8x5 : gerarBlocoZpl4x25;
+
+    // Quantidade total de etiquetas (preferimos `etiquetas`; mantemos `linhas` por
+    // compatibilidade — no formato 4x2.5 cada linha = 2 etiquetas)
+    let totalEtiquetas;
+    if (etiquetas != null) {
+      totalEtiquetas = Math.max(1, Math.min(1000, parseInt(etiquetas) || 1));
+    } else {
+      const n = Math.max(1, Math.min(500, parseInt(linhas) || 1));
+      totalEtiquetas = formato === '8x5' ? n : n * 2;
+    }
+
     let zpl = '';
-    for (let i = 0; i < n; i++) zpl += gerar(inventoryId, title || '', sku || '');
+    if (formato === '8x5') {
+      for (let i = 0; i < totalEtiquetas; i++) zpl += gerarBlocoZpl8x5(inventoryId, title || '', sku || '');
+    } else {
+      // 4x2.5 = 2 colunas. Imprimimos blocos cheios + meio-bloco se for ímpar.
+      const blocosCheios = Math.floor(totalEtiquetas / 2);
+      const ehImpar = (totalEtiquetas % 2) === 1;
+      for (let i = 0; i < blocosCheios; i++) zpl += gerarBlocoZpl4x25(inventoryId, title || '', sku || '');
+      if (ehImpar) zpl += gerarMeioBlocoZpl4x25(inventoryId, title || '', sku || '');
+    }
+
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="Etiquetas-${inventoryId}-${formato}.zpl"`);
+    res.setHeader('Content-Disposition', `attachment; filename="Etiquetas-${inventoryId}-${formato}-${totalEtiquetas}.zpl"`);
     res.send(zpl);
   } catch (e) {
     console.error('[ZPL] Erro:', e.message);

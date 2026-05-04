@@ -347,32 +347,25 @@
     const qtdEtiquetas = Math.max(1, parseInt(qtyInput.value) || 1);
     const tamanhoSel = document.getElementById('tamanho').value || '4x2.5';
     localStorage.setItem('bipar_tamanho', tamanhoSel);
-    // 4x2.5 = 2 colunas (cada bloco = 2 etiquetas) | 8x5 = 1 coluna (cada bloco = 1 etiqueta)
-    const etiquetasPorBloco = (tamanhoSel === '8x5') ? 1 : 2;
-    const linhas = Math.ceil(qtdEtiquetas / etiquetasPorBloco);
-    const etiquetasReais = linhas * etiquetasPorBloco;
 
-    // Gera o ZPL no servidor e baixa o .txt automaticamente
-    await baixarZpl(produto, linhas, tamanhoSel);
+    // Gera o ZPL no servidor (back-end já lida com qtd ímpar em rolo 2 col.)
+    await baixarZpl(produto, qtdEtiquetas, tamanhoSel);
 
-    // Atualiza contador com as etiquetas que efetivamente saem
-    bipados[ean] = (bipados[ean] || 0) + etiquetasReais;
+    // Atualiza contador com a quantidade exata pedida pelo usuário
+    bipados[ean] = (bipados[ean] || 0) + qtdEtiquetas;
     localStorage.setItem('inbound_bipados', JSON.stringify(bipados));
     renderProdutos();
 
     const done = bipados[ean];
     const total = produto.unidades || 0;
     const restante = Math.max(0, total - done);
-    const aviso = etiquetasReais !== qtdEtiquetas
-      ? ` (rolo 2 col., saem ${etiquetasReais})`
-      : '';
 
     scanInput.className = 'scan-input success';
     mostrarFeedback('success',
       `<div class="fb-content">
         <div class="fb-icon">${done >= total ? '🎉' : '✓'}</div>
         <div class="fb-title">${escapeHtml(produto.title)}</div>
-        <div class="fb-sub">${qtdEtiquetas} etiqueta${qtdEtiquetas>1?'s':''} ${tamanhoSel}cm${aviso} · ${done}/${total} bipados${restante>0 ? ` · faltam ${restante}` : ' · COMPLETO!'}</div>
+        <div class="fb-sub">${qtdEtiquetas} etiqueta${qtdEtiquetas>1?'s':''} ${tamanhoSel}cm · ${done}/${total} bipados${restante>0 ? ` · faltam ${restante}` : ' · COMPLETO!'}</div>
       </div>`
     );
     beep('success');
@@ -389,7 +382,7 @@
   }
 
   // ── Geração do arquivo ZPL (formato ML) e download ───────────────────────
-  async function baixarZpl(produto, linhas, tamanho) {
+  async function baixarZpl(produto, etiquetas, tamanho) {
     const r = await fetch('/api/generate-zpl', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -397,7 +390,7 @@
         inventoryId: produto.inventoryId,
         title: produto.title,
         sku: produto.sku,
-        linhas,
+        etiquetas,                       // qtd EXATA de etiquetas desejadas
         tamanho,
       }),
     });
