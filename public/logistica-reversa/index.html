@@ -989,7 +989,7 @@
       if (marca && !cont[key].marca) cont[key].marca = marca;
     }
     const lista = Object.values(cont).sort((a, b) => b.qtd - a.qtd);
-    const top = lista.slice(0, 30);
+    const top = lista; // mostra TODOS os produtos
     const totalOcorr = lista.reduce((s, x) => s + x.qtd, 0);
 
     const info = document.getElementById('topp-info');
@@ -1023,21 +1023,34 @@
     }).join('');
 
     container.innerHTML = `
-      <table class="topp-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>SKU</th>
-            <th>Descrição</th>
-            <th>Marca</th>
-            <th class="right">Devoluções</th>
-            <th>% do total</th>
-          </tr>
-        </thead>
-        <tbody>${linhas}</tbody>
-      </table>
-      ${lista.length > 30 ? `<div style="text-align:center;color:var(--text3);font-size:0.78rem;margin-top:14px">Mostrando os 30 primeiros de ${lista.length} produtos</div>` : ''}
+      <input type="text" class="topp-search" placeholder="Buscar por SKU, descrição ou marca…" oninput="filtrarTopProdutos(this.value)" style="width:100%;background:var(--bg);border:1px solid var(--border2);color:var(--text);padding:8px 12px;border-radius:7px;font-size:0.85rem;margin-bottom:12px;outline:none" />
+      <div style="max-height:600px;overflow-y:auto;border:1px solid var(--border);border-radius:8px">
+        <table class="topp-table" id="topp-table-full">
+          <thead style="position:sticky;top:0;background:var(--bg2);z-index:1">
+            <tr>
+              <th>#</th>
+              <th>SKU</th>
+              <th>Descrição</th>
+              <th>Marca</th>
+              <th class="right">Devoluções</th>
+              <th>% do total</th>
+            </tr>
+          </thead>
+          <tbody>${linhas}</tbody>
+        </table>
+      </div>
+      <div style="text-align:center;color:var(--text3);font-size:0.78rem;margin-top:10px">Mostrando todos os ${lista.length.toLocaleString('pt-BR')} produtos · use a busca acima ou role a tabela</div>
     `;
+  }
+
+  // Busca dentro da tabela "top produtos"
+  function filtrarTopProdutos(q) {
+    const query = String(q || '').toLowerCase().trim();
+    const linhas = document.querySelectorAll('#topp-table-full tbody tr');
+    linhas.forEach(tr => {
+      const txt = tr.textContent.toLowerCase();
+      tr.style.display = (!query || txt.includes(query)) ? '' : 'none';
+    });
   }
 
   function escapeHtml(s) {

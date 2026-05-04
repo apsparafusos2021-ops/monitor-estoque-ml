@@ -627,7 +627,7 @@
       if (desc) contagens[sku].desc = desc;
     }
     const lista = Object.values(contagens).sort((a, b) => b.qtd - a.qtd);
-    const top = lista.slice(0, 20);
+    const top = lista; // mostra TODOS os SKUs
     const totalOcorrencias = lista.reduce((s, x) => s + x.qtd, 0);
 
     const info = document.getElementById('topskus-info');
@@ -666,20 +666,32 @@
     }).join('');
 
     container.innerHTML = `
-      <table class="topskus-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>SKU</th>
-            <th>Descrição</th>
-            <th class="right">Ocorrências</th>
-            <th>% do total</th>
-          </tr>
-        </thead>
-        <tbody>${linhas}</tbody>
-      </table>
-      ${lista.length > 20 ? `<div style="text-align:center;color:var(--text3);font-size:0.78rem;margin-top:14px">Mostrando os 20 primeiros de ${lista.length} SKUs</div>` : ''}
+      <input type="text" class="topskus-search" placeholder="Buscar por SKU ou descrição…" oninput="filtrarTopSkus(this.value)" style="width:100%;background:var(--bg);border:1px solid var(--border2);color:var(--text);padding:8px 12px;border-radius:7px;font-size:0.85rem;margin-bottom:12px;outline:none" />
+      <div style="max-height:600px;overflow-y:auto;border:1px solid var(--border);border-radius:8px">
+        <table class="topskus-table" id="topskus-table-full">
+          <thead style="position:sticky;top:0;background:var(--bg2);z-index:1">
+            <tr>
+              <th>#</th>
+              <th>SKU</th>
+              <th>Descrição</th>
+              <th class="right">Ocorrências</th>
+              <th>% do total</th>
+            </tr>
+          </thead>
+          <tbody>${linhas}</tbody>
+        </table>
+      </div>
+      <div style="text-align:center;color:var(--text3);font-size:0.78rem;margin-top:10px">Mostrando todos os ${lista.length.toLocaleString('pt-BR')} SKUs · use a busca acima ou role a tabela</div>
     `;
+  }
+
+  function filtrarTopSkus(q) {
+    const query = String(q || '').toLowerCase().trim();
+    const linhas = document.querySelectorAll('#topskus-table-full tbody tr');
+    linhas.forEach(tr => {
+      const txt = tr.textContent.toLowerCase();
+      tr.style.display = (!query || txt.includes(query)) ? '' : 'none';
+    });
   }
 
   function renderChart(labels, data, colors) {
